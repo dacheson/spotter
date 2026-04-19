@@ -102,6 +102,8 @@ Both commands also persist their latest run metadata as JSON artifacts in the co
 
 The scanner can now walk TS, TSX, JS, and JSX source files and extract AST-backed state signals such as loading, error, empty, modal, form, auth, and role checks.
 
+Those findings now feed deterministic loading, error, and form heuristics with scenario tags and recipe hints for the scenario layer.
+
 ## Example Output
 
 ```txt
