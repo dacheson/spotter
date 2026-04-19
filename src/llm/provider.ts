@@ -1,6 +1,8 @@
 import type { ComponentSignalFinding } from '../scanner/index.js';
 import type { RouteDefinition, ScenarioDefinition } from '../types.js';
 
+import { validateLlmEnhancementProposal } from './validation.js';
+
 export type LlmProviderName = 'mock' | 'openai' | 'local';
 
 export interface LlmEnhancementProposal {
@@ -30,7 +32,7 @@ export interface LlmProviderRequest {
 }
 
 export interface LlmProviderResponse {
-  proposal?: LlmEnhancementProposal;
+  proposal?: unknown;
   rawText: string;
 }
 
@@ -92,7 +94,9 @@ function createMockLlmProvider(options: CreateLlmProviderOptions): LlmProvider {
   return {
     metadata,
     async enhanceScenarios(): Promise<LlmEnhancementProposal> {
-      return options.mockProposal ?? createDefaultProposal('mock', options.model);
+      return validateLlmEnhancementProposal(
+        options.mockProposal ?? createDefaultProposal('mock', options.model)
+      );
     }
   };
 }
@@ -116,7 +120,7 @@ function createInvokerLlmProvider(options: CreateLlmProviderOptions): LlmProvide
       });
 
       if (response.proposal) {
-        return response.proposal;
+        return validateLlmEnhancementProposal(response.proposal);
       }
 
       throw new Error(`LLM provider ${options.provider} returned no parsed proposal.`);

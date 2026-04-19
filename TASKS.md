@@ -35,4 +35,4 @@
 
 * [x] Add the LLM provider abstraction
 * [x] Build the scenario enhancer
-* [ ] Add JSON schema validation
+* [x] Add JSON schema validation

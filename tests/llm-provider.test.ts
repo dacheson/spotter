@@ -100,6 +100,30 @@ describe('llm provider abstraction', () => {
     });
   });
 
+  it('rejects invalid proposal payloads returned by an invoker-backed provider', async () => {
+    const provider = createLlmProvider({
+      provider: 'openai',
+      model: 'gpt-5',
+      invoker: async () => ({
+        rawText: '{"provider":"openai","scenarios":[{"id":"bad","routePath":"/checkout","name":"Bad","priority":"urgent","tags":[]}]}',
+        proposal: {
+          provider: 'openai',
+          scenarios: [
+            {
+              id: 'bad',
+              routePath: '/checkout',
+              name: 'Bad',
+              priority: 'urgent',
+              tags: []
+            }
+          ]
+        }
+      })
+    });
+
+    await expect(provider.enhanceScenarios(createInput())).rejects.toThrow('Invalid LLM proposal');
+  });
+
   it('renders deterministic prompts from routes, signals, and existing scenarios', () => {
     expect(buildScenarioEnhancementPrompts(createInput())).toEqual({
       systemPrompt:

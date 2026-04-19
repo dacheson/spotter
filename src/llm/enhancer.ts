@@ -3,11 +3,13 @@ import { prioritizeScenarios, type PrioritizeScenariosOptions } from '../scenari
 import type { RouteDefinition, ScenarioDefinition } from '../types.js';
 
 import type { LlmEnhancementProposal, LlmProvider } from './provider.js';
+import { normalizeLlmEnhancementProposal } from './validation.js';
 
 export interface ScenarioEnhancerInput {
   existingScenarios?: ScenarioDefinition[];
   heuristicsByRoute?: Record<string, ComponentStateHeuristic[]>;
   instructions?: string;
+  maxGeneratedScenarios?: number;
   provider: LlmProvider;
   routes: RouteDefinition[];
   signalKindsByRoute?: PrioritizeScenariosOptions['signalKindsByRoute'];
@@ -21,7 +23,24 @@ export interface ScenarioEnhancerResult {
 export async function enhanceScenarios(
   input: ScenarioEnhancerInput
 ): Promise<ScenarioEnhancerResult> {
-  const proposal = await input.provider.enhanceScenarios(createEnhancementInput(input));
+  const providerProposal = await input.provider.enhanceScenarios(createEnhancementInput(input));
+  const normalizeOptions: {
+    existingScenarios?: ScenarioDefinition[];
+    maxGeneratedScenarios?: number;
+    proposal: LlmEnhancementProposal;
+  } = {
+    proposal: providerProposal
+  };
+
+  if (input.existingScenarios) {
+    normalizeOptions.existingScenarios = input.existingScenarios;
+  }
+
+  if (input.maxGeneratedScenarios !== undefined) {
+    normalizeOptions.maxGeneratedScenarios = input.maxGeneratedScenarios;
+  }
+
+  const proposal = normalizeLlmEnhancementProposal(normalizeOptions);
 
   const routesByPath = Object.fromEntries(input.routes.map((route) => [route.path, route]));
   const prioritizedScenarios = prioritizeScenarios(proposal.scenarios, createPrioritizeOptions(input, routesByPath));

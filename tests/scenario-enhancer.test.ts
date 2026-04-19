@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createLlmProvider, enhanceScenarios } from '../src/index.js';
 
 describe('scenario enhancer', () => {
-  it('passes routes, signals, and existing scenarios to the provider and returns the proposal', async () => {
+  it('merges validated provider scenarios with existing scenarios', async () => {
     const provider = createLlmProvider({
       provider: 'mock',
       mockProposal: {
@@ -54,6 +54,13 @@ describe('scenario enhancer', () => {
       proposal: {
         provider: 'mock',
         scenarios: [
+          {
+            id: 'catalog-default',
+            routePath: '/catalog',
+            name: 'Catalog Default',
+            priority: 'low',
+            tags: []
+          },
           {
             id: 'catalog-empty-state',
             routePath: '/catalog',
@@ -124,6 +131,97 @@ describe('scenario enhancer', () => {
             name: 'Account Role Check',
             priority: 'high',
             tags: ['auth']
+          }
+        ]
+      }
+    });
+  });
+
+  it('deduplicates provider suggestions against deterministic scenarios and caps generated additions', async () => {
+    const provider = createLlmProvider({
+      provider: 'mock',
+      mockProposal: {
+        provider: 'mock',
+        scenarios: [
+          {
+            id: 'catalog-default-copy',
+            routePath: '/catalog',
+            name: 'Catalog Default',
+            priority: 'low',
+            tags: ['  empty  ', 'empty']
+          },
+          {
+            id: 'catalog-empty-state',
+            routePath: '/catalog',
+            name: 'Catalog Empty State',
+            priority: 'low',
+            tags: ['empty']
+          },
+          {
+            id: 'catalog-filter-reset',
+            routePath: '/catalog',
+            name: 'Catalog Filter Reset',
+            priority: 'medium',
+            tags: ['filters']
+          },
+          {
+            id: 'catalog-mobile-grid',
+            routePath: '/catalog',
+            name: 'Catalog Mobile Grid',
+            priority: 'medium',
+            tags: ['mobile']
+          }
+        ]
+      }
+    });
+
+    const result = await enhanceScenarios({
+      provider,
+      maxGeneratedScenarios: 2,
+      routes: [
+        {
+          path: '/catalog',
+          filePath: 'app/catalog/page.tsx',
+          dynamic: false,
+          dynamicSegments: []
+        }
+      ],
+      signals: [],
+      existingScenarios: [
+        {
+          id: 'catalog-default',
+          routePath: '/catalog',
+          name: 'Catalog Default',
+          priority: 'low',
+          tags: []
+        }
+      ]
+    });
+
+    expect(result).toEqual({
+      proposal: {
+        provider: 'mock',
+        scenarios: [
+          {
+            id: 'catalog-default',
+            routePath: '/catalog',
+            name: 'Catalog Default',
+            priority: 'low',
+            tags: []
+          },
+          {
+            id: 'catalog-empty-state',
+            routePath: '/catalog',
+            name: 'Catalog Empty State',
+            priority: 'low',
+            tags: ['empty']
+          },
+          {
+            id: 'catalog-filter-reset',
+            routePath: '/catalog',
+            name: 'Catalog Filter Reset',
+            priority: 'low',
+            tags: ['filters']
           }
         ]
       }
