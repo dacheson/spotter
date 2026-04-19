@@ -76,12 +76,13 @@ npx spotter changed
 ```bash
 spotter init
 spotter scan
-spotter scenarios
 spotter generate
 spotter baseline
 spotter changed
 spotter report
 ```
+
+The CLI shell is wired with Commander.js and currently exposes the baseline command surface with placeholder handlers while the underlying features are built incrementally.
 
 ## Example Output
 

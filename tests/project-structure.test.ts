@@ -17,7 +17,6 @@ describe('project structure', () => {
     expect(plannedCliCommands.map((command) => command.name)).toEqual([
       'init',
       'scan',
-      'scenarios',
       'generate',
       'baseline',
       'changed',

@@ -3,7 +3,7 @@
 ## Sprint 1
 
 * [x] Set up the TypeScript project structure
-* [ ] Build the CLI shell
+* [x] Build the CLI shell
 * [ ] Add the config loader
 * [ ] Add a logging utility
 
