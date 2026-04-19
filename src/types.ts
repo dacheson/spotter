@@ -22,10 +22,19 @@ export interface LocaleDefinition {
   rtl?: boolean;
 }
 
+export type DynamicRouteSegmentKind = 'single' | 'catch-all' | 'optional-catch-all';
+
+export interface DynamicRouteSegment {
+  name: string;
+  kind: DynamicRouteSegmentKind;
+  segment: string;
+}
+
 export interface RouteDefinition {
   path: string;
   filePath: string;
   dynamic: boolean;
+  dynamicSegments: DynamicRouteSegment[];
 }
 
 export interface ScenarioDefinition {

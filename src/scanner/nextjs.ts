@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { RouteDefinition } from '../types.js';
+import type { DynamicRouteSegment, RouteDefinition } from '../types.js';
 
 const appPageFileNames = new Set(['page.js', 'page.jsx', 'page.ts', 'page.tsx']);
 const pagesFileExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
@@ -109,10 +109,13 @@ async function collectPagesRoutes(
 }
 
 function addRoute(routeEntries: Map<string, RouteDefinition>, routePath: string, filePath: string): void {
+  const dynamicSegments = extractDynamicRouteSegments(routePath);
+
   routeEntries.set(routePath, {
     path: routePath,
     filePath: normalizeFilePath(filePath),
-    dynamic: routePath.includes('[')
+    dynamic: dynamicSegments.length > 0,
+    dynamicSegments
   });
 }
 
@@ -138,4 +141,64 @@ function isRouteGroupSegment(segment: string): boolean {
 
 function isParallelRouteSegment(segment: string): boolean {
   return segment.startsWith('@');
+}
+
+function extractDynamicRouteSegments(routePath: string): DynamicRouteSegment[] {
+  return routePath
+    .split('/')
+    .filter(Boolean)
+    .map(parseDynamicRouteSegment)
+    .filter((segment): segment is DynamicRouteSegment => segment !== null);
+}
+
+function parseDynamicRouteSegment(segment: string): DynamicRouteSegment | null {
+  const optionalCatchAllMatch = /^\[\[\.\.\.(.+)\]\]$/.exec(segment);
+
+  if (optionalCatchAllMatch) {
+    const name = optionalCatchAllMatch[1];
+
+    if (!name) {
+      return null;
+    }
+
+    return {
+      name,
+      kind: 'optional-catch-all',
+      segment
+    };
+  }
+
+  const catchAllMatch = /^\[\.\.\.(.+)\]$/.exec(segment);
+
+  if (catchAllMatch) {
+    const name = catchAllMatch[1];
+
+    if (!name) {
+      return null;
+    }
+
+    return {
+      name,
+      kind: 'catch-all',
+      segment
+    };
+  }
+
+  const singleMatch = /^\[(.+)\]$/.exec(segment);
+
+  if (singleMatch) {
+    const name = singleMatch[1];
+
+    if (!name) {
+      return null;
+    }
+
+    return {
+      name,
+      kind: 'single',
+      segment
+    };
+  }
+
+  return null;
 }

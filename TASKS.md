@@ -11,7 +11,7 @@
 
 * [x] Detect Next.js routes
 * [x] Output a route manifest JSON file
-* [ ] Handle dynamic routes
+* [x] Handle dynamic routes
 
 ## Sprint 3
 

@@ -50,12 +50,20 @@ describe('route manifest', () => {
         {
           path: '/',
           filePath: 'app/page.tsx',
-          dynamic: false
+          dynamic: false,
+          dynamicSegments: []
         },
         {
           path: '/blog/[slug]',
           filePath: 'app/blog/[slug]/page.tsx',
-          dynamic: true
+          dynamic: true,
+          dynamicSegments: [
+            {
+              name: 'slug',
+              kind: 'single',
+              segment: '[slug]'
+            }
+          ]
         }
       ]
     });
@@ -89,7 +97,8 @@ describe('route manifest', () => {
         {
           path: '/',
           filePath: 'app/page.tsx',
-          dynamic: false
+          dynamic: false,
+          dynamicSegments: []
         }
       ]
     });
@@ -111,7 +120,8 @@ describe('route manifest', () => {
         {
           path: '/docs',
           filePath: 'pages/docs.tsx',
-          dynamic: false
+          dynamic: false,
+          dynamicSegments: []
         }
       ]
     });

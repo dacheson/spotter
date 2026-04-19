@@ -40,22 +40,32 @@ describe('detectNextRoutes', () => {
       {
         path: '/',
         filePath: 'app/page.tsx',
-        dynamic: false
+        dynamic: false,
+        dynamicSegments: []
       },
       {
         path: '/blog/[slug]',
         filePath: 'app/blog/[slug]/page.tsx',
-        dynamic: true
+        dynamic: true,
+        dynamicSegments: [
+          {
+            name: 'slug',
+            kind: 'single',
+            segment: '[slug]'
+          }
+        ]
       },
       {
         path: '/dashboard',
         filePath: 'app/dashboard/page.tsx',
-        dynamic: false
+        dynamic: false,
+        dynamicSegments: []
       },
       {
         path: '/pricing',
         filePath: 'app/(marketing)/pricing/page.tsx',
-        dynamic: false
+        dynamic: false,
+        dynamicSegments: []
       }
     ]);
   });
@@ -75,17 +85,26 @@ describe('detectNextRoutes', () => {
       {
         path: '/',
         filePath: 'pages/index.tsx',
-        dynamic: false
+        dynamic: false,
+        dynamicSegments: []
       },
       {
         path: '/blog/[slug]',
         filePath: 'pages/blog/[slug].tsx',
-        dynamic: true
+        dynamic: true,
+        dynamicSegments: [
+          {
+            name: 'slug',
+            kind: 'single',
+            segment: '[slug]'
+          }
+        ]
       },
       {
         path: '/docs/getting-started',
         filePath: 'pages/docs/getting-started.tsx',
-        dynamic: false
+        dynamic: false,
+        dynamicSegments: []
       }
     ]);
   });
@@ -102,7 +121,44 @@ describe('detectNextRoutes', () => {
     expect(routes[0]).toEqual({
       path: '/about',
       filePath: 'app/about/page.tsx',
-      dynamic: false
+      dynamic: false,
+      dynamicSegments: []
     });
+  });
+
+  it('captures catch-all and optional catch-all params explicitly', async () => {
+    const cwd = await createTempDir();
+
+    await writeFixtureFile(cwd, 'app/docs/[...slug]/page.tsx');
+    await writeFixtureFile(cwd, 'pages/shop/[[...parts]].tsx');
+
+    const routes = await detectNextRoutes({ cwd });
+
+    expect(routes).toEqual([
+      {
+        path: '/docs/[...slug]',
+        filePath: 'app/docs/[...slug]/page.tsx',
+        dynamic: true,
+        dynamicSegments: [
+          {
+            name: 'slug',
+            kind: 'catch-all',
+            segment: '[...slug]'
+          }
+        ]
+      },
+      {
+        path: '/shop/[[...parts]]',
+        filePath: 'pages/shop/[[...parts]].tsx',
+        dynamic: true,
+        dynamicSegments: [
+          {
+            name: 'parts',
+            kind: 'optional-catch-all',
+            segment: '[[...parts]]'
+          }
+        ]
+      }
+    ]);
   });
 });
