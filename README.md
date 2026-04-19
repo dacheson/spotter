@@ -88,6 +88,8 @@ The CLI shell is wired with Commander.js and currently exposes the baseline comm
 
 Spotter looks for `spotter.config.ts` or `spotter.config.json` in the current working directory. If no config file exists, it falls back to built-in defaults for screenshots, generated tests, viewports, and locales.
 
+Generated Playwright test files are written to the configured `testsDir` path, which defaults to `.spotter/tests`.
+
 ## Example Output
 
 ```txt

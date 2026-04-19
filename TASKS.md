@@ -15,7 +15,7 @@
 
 ## Sprint 3
 
-* [ ] Generate Playwright tests
+* [x] Generate Playwright tests
 * [ ] Add desktop and mobile viewports
 * [ ] Add screenshot assertions
 
