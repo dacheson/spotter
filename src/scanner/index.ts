@@ -2,6 +2,7 @@ import type { FrameworkName, PackageManagerName, RouteDefinition } from '../type
 
 export * from './nextjs.js';
 export * from './manifest.js';
+export * from './signals.js';
 
 export interface RepositoryMetadata {
   rootDir: string;

@@ -27,7 +27,7 @@
 
 ## Sprint 5
 
-* [ ] Build the AST state scanner
+* [x] Build the AST state scanner
 * [ ] Add loading, error, and form heuristics
 * [ ] Add a scenario priority engine
 
