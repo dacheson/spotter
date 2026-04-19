@@ -1,6 +1,7 @@
 import type { FrameworkName, PackageManagerName, RouteDefinition } from '../types.js';
 
 export * from './nextjs.js';
+export * from './manifest.js';
 
 export interface RepositoryMetadata {
   rootDir: string;
