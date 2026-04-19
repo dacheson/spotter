@@ -5,7 +5,7 @@
 * [x] Set up the TypeScript project structure
 * [x] Build the CLI shell
 * [x] Add the config loader
-* [ ] Add a logging utility
+* [x] Add a logging utility
 
 ## Sprint 2
 
