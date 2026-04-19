@@ -108,6 +108,8 @@ Scenario priorities are now assigned deterministically from route metadata, tags
 
 The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for future OpenAI or local model integrations.
 
+The scenario enhancer now routes provider proposals back through the deterministic priority engine so suggested scenarios come back normalized against the known route and signal context.
+
 ## Example Output
 
 ```txt
