@@ -27,6 +27,12 @@ describe('config loader', () => {
     const loaded = await loadSpotterConfig({ cwd });
 
     expect(loaded.configPath).toBeNull();
+    expect(loaded.config.appUrl).toBe('http://127.0.0.1:3000');
+    expect(loaded.config.devServer).toEqual({
+      command: 'npm run dev',
+      reuseExistingServer: true,
+      timeoutMs: 120000
+    });
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
       screenshotsDir: '.spotter/baselines',
@@ -50,6 +56,11 @@ describe('config loader', () => {
       configPath,
       JSON.stringify(
         {
+          appUrl: 'http://127.0.0.1:4000',
+          devServer: {
+            command: 'pnpm dev',
+            timeoutMs: 30000
+          },
           paths: {
             screenshotsDir: 'artifacts/screenshots'
           },
@@ -63,6 +74,12 @@ describe('config loader', () => {
     const loaded = await loadSpotterConfig({ cwd });
 
     expect(loaded.configPath).toBe(configPath);
+    expect(loaded.config.appUrl).toBe('http://127.0.0.1:4000');
+    expect(loaded.config.devServer).toEqual({
+      command: 'pnpm dev',
+      reuseExistingServer: true,
+      timeoutMs: 30000
+    });
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
       screenshotsDir: 'artifacts/screenshots',
@@ -85,6 +102,8 @@ describe('config loader', () => {
       configPath,
       [
         'export default {',
+        "  appUrl: 'http://127.0.0.1:3100',",
+        '  devServer: { command: \'npm run start\', reuseExistingServer: false, cwd: \'apps/web\', timeoutMs: 45000 },',
         "  rootDir: 'apps/web',",
         '  viewports: [{ name: \'tablet\', width: 1024, height: 768 }],',
         '  paths: { testsDir: \'.generated/spotter/tests\' }',
@@ -96,6 +115,13 @@ describe('config loader', () => {
     const loaded = await loadSpotterConfig({ cwd });
 
     expect(loaded.configPath).toBe(configPath);
+    expect(loaded.config.appUrl).toBe('http://127.0.0.1:3100');
+    expect(loaded.config.devServer).toEqual({
+      command: 'npm run start',
+      reuseExistingServer: false,
+      cwd: 'apps/web',
+      timeoutMs: 45000
+    });
     expect(loaded.config.rootDir).toBe('apps/web');
     expect(loaded.config.viewports).toEqual([
       {
@@ -109,5 +135,26 @@ describe('config loader', () => {
       screenshotsDir: '.spotter/baselines',
       testsDir: '.generated/spotter/tests'
     });
+  });
+
+  it('supports disabling automatic dev server startup', async () => {
+    const cwd = await createTempDir();
+    const configPath = path.join(cwd, 'spotter.config.json');
+
+    await writeFile(
+      configPath,
+      JSON.stringify(
+        {
+          devServer: null
+        },
+        null,
+        2
+      )
+    );
+
+    const loaded = await loadSpotterConfig({ cwd });
+
+    expect(loaded.configPath).toBe(configPath);
+    expect(loaded.config.devServer).toBeNull();
   });
 });

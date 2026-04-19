@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
+import type { SpotterDevServerConfig } from '../config/index.js';
 import { collectDiffSummary, type DiffSummary } from '../diff/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
 import {
@@ -21,6 +22,7 @@ export interface ChangedCommandDependencies {
 
 export interface ChangedCommandResult {
   artifactPath: string;
+  appUrl: string;
   baselineDir: string;
   configPath: string;
   resultsDir: string;
@@ -47,7 +49,13 @@ export async function runChangedCommand(
   await mkdir(artifactsDir, { recursive: true });
   await writeFile(
     configPath,
-    createChangedPlaywrightConfigContents({ baselineDir, testDir, resultsDir }),
+    createChangedPlaywrightConfigContents({
+      appUrl: config.appUrl,
+      baselineDir,
+      devServer: config.devServer,
+      testDir,
+      resultsDir
+    }),
     'utf8'
   );
 
@@ -74,6 +82,7 @@ export async function runChangedCommand(
 
   return {
     artifactPath: artifact.artifactPath,
+    appUrl: config.appUrl,
     baselineDir,
     configPath,
     resultsDir,
@@ -86,12 +95,16 @@ export async function runChangedCommand(
 }
 
 export function createChangedPlaywrightConfigContents(paths: {
+  appUrl: string;
   baselineDir: string;
+  devServer: SpotterDevServerConfig | null;
   testDir: string;
   resultsDir: string;
 }): string {
   const baselineConfig = createBaselinePlaywrightConfigContents({
+    appUrl: paths.appUrl,
     baselineDir: paths.baselineDir,
+    devServer: paths.devServer,
     testDir: paths.testDir
   }).trimEnd();
   const outputDir = normalizeForPlaywrightPath(paths.resultsDir);

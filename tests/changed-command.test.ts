@@ -60,6 +60,8 @@ describe('changed command', () => {
       'spotter.config.json',
       JSON.stringify(
         {
+          appUrl: 'http://127.0.0.1:4200',
+          devServer: null,
           paths: {
             artifactsDir: '.generated/artifacts',
             screenshotsDir: '.generated/baselines',
@@ -83,9 +85,12 @@ describe('changed command', () => {
     const artifactContents = await readFile(result.artifactPath, 'utf8');
 
     expect(result.passed).toBe(false);
+    expect(result.appUrl).toBe('http://127.0.0.1:4200');
     expect(result.summary.changed).toBe(1);
     expect(result.artifactPath).toBe(path.resolve(cwd, '.generated/artifacts/changed-run.json'));
     expect(configContents).toContain('outputDir:');
+    expect(configContents).toContain('baseURL: "http://127.0.0.1:4200"');
+    expect(configContents).not.toContain('webServer: {');
     expect(JSON.parse(artifactContents)).toMatchObject({
       kind: 'changed',
       passed: false,
@@ -102,6 +107,7 @@ describe('changed command', () => {
     const write = vi.fn<(message: string) => void>();
     const runChanged = vi.fn(async () => ({
       artifactPath: 'C:/repo/.spotter/artifacts/changed-run.json',
+      appUrl: 'http://127.0.0.1:3000',
       baselineDir: 'C:/repo/.spotter/baselines',
       configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
       resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
@@ -142,12 +148,19 @@ describe('changed command', () => {
 
   it('renders a Playwright config with a results output directory', () => {
     const contents = createChangedPlaywrightConfigContents({
+      appUrl: 'http://127.0.0.1:3000',
       baselineDir: 'C:/repo/.spotter/baselines',
+      devServer: {
+        command: 'npm run dev',
+        reuseExistingServer: true,
+        timeoutMs: 120000
+      },
       testDir: 'C:/repo/.spotter/tests',
       resultsDir: 'C:/repo/.spotter/artifacts/playwright-results'
     });
 
     expect(contents).toContain('snapshotPathTemplate: "C:/repo/.spotter/baselines/{testFilePath}/{arg}{ext}"');
+    expect(contents).toContain('baseURL: "http://127.0.0.1:3000"');
     expect(contents).toContain('outputDir: "C:/repo/.spotter/artifacts/playwright-results"');
   });
 });

@@ -6,6 +6,13 @@ import { createJiti } from 'jiti';
 
 import type { LocaleDefinition, ViewportDefinition } from '../types.js';
 
+export interface SpotterDevServerConfig {
+  command: string;
+  cwd?: string;
+  reuseExistingServer: boolean;
+  timeoutMs: number;
+}
+
 export interface SpotterPathsConfig {
   artifactsDir: string;
   screenshotsDir: string;
@@ -13,6 +20,8 @@ export interface SpotterPathsConfig {
 }
 
 export interface SpotterConfig {
+  appUrl: string;
+  devServer: SpotterDevServerConfig | null;
   rootDir: string;
   viewports: ViewportDefinition[];
   locales: LocaleDefinition[];
@@ -20,6 +29,8 @@ export interface SpotterConfig {
 }
 
 export interface SpotterConfigInput {
+  appUrl?: string;
+  devServer?: Partial<SpotterDevServerConfig> | null;
   rootDir?: string;
   viewports?: ViewportDefinition[];
   locales?: LocaleDefinition[];
@@ -67,6 +78,12 @@ export const defaultLocales: LocaleDefinition[] = [
 ];
 
 export const defaultSpotterConfig: SpotterConfig = {
+  appUrl: 'http://127.0.0.1:3000',
+  devServer: {
+    command: 'npm run dev',
+    reuseExistingServer: true,
+    timeoutMs: 120000
+  },
   rootDir: '.',
   viewports: defaultViewports,
   locales: defaultLocales,
@@ -81,6 +98,12 @@ export const supportedConfigFileNames = ['spotter.config.ts', 'spotter.config.js
 
 function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
   return {
+    appUrl: config.appUrl,
+    devServer: config.devServer
+      ? {
+          ...config.devServer
+        }
+      : null,
     rootDir: config.rootDir,
     viewports: config.viewports.map((viewport) => ({ ...viewport })),
     locales: config.locales.map((locale) => ({ ...locale })),
@@ -92,8 +115,28 @@ function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
 
 export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterConfig {
   const defaults = cloneSpotterConfig(defaultSpotterConfig);
+  let devServer: SpotterDevServerConfig | null = defaults.devServer;
+
+  if (overrides.devServer === null) {
+    devServer = null;
+  } else if (overrides.devServer) {
+    devServer = {
+      command: overrides.devServer.command ?? defaults.devServer?.command ?? 'npm run dev',
+      reuseExistingServer:
+        overrides.devServer.reuseExistingServer ?? defaults.devServer?.reuseExistingServer ?? true,
+      timeoutMs: overrides.devServer.timeoutMs ?? defaults.devServer?.timeoutMs ?? 120000
+    };
+
+    const devServerCwd = overrides.devServer.cwd ?? defaults.devServer?.cwd;
+
+    if (devServerCwd) {
+      devServer.cwd = devServerCwd;
+    }
+  }
 
   return {
+    appUrl: overrides.appUrl ?? defaults.appUrl,
+    devServer,
     rootDir: overrides.rootDir ?? defaults.rootDir,
     viewports: overrides.viewports ?? defaults.viewports,
     locales: overrides.locales ?? defaults.locales,

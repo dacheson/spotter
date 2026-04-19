@@ -24,9 +24,19 @@ describe('starter config writer', () => {
 
     const written = await writeStarterConfig({ cwd });
     const contents = await readFile(written.configPath, 'utf8');
+    const parsed = JSON.parse(contents) as {
+      appUrl: string;
+      devServer: { command: string; reuseExistingServer: boolean; timeoutMs: number };
+    };
 
     expect(path.basename(written.configPath)).toBe('spotter.config.json');
-    expect(JSON.parse(contents)).toEqual(written.config);
+    expect(parsed).toEqual(written.config);
+    expect(parsed.appUrl).toBe('http://127.0.0.1:3000');
+    expect(parsed.devServer).toEqual({
+      command: 'npm run dev',
+      reuseExistingServer: true,
+      timeoutMs: 120000
+    });
   });
 
   it('does not overwrite an existing config file', async () => {

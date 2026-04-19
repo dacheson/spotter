@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
+import type { SpotterDevServerConfig } from '../config/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
 
 export interface BaselineCommandOptions {
@@ -29,6 +30,7 @@ export interface BaselineCommandDependencies {
 
 export interface BaselineCommandResult {
   artifactPath: string;
+  appUrl: string;
   baselineDir: string;
   configPath: string;
   testDir: string;
@@ -49,7 +51,16 @@ export async function runBaselineCommand(
 
   await mkdir(baselineDir, { recursive: true });
   await mkdir(artifactsDir, { recursive: true });
-  await writeFile(configPath, createBaselinePlaywrightConfigContents({ baselineDir, testDir }), 'utf8');
+  await writeFile(
+    configPath,
+    createBaselinePlaywrightConfigContents({
+      appUrl: config.appUrl,
+      baselineDir,
+      devServer: createResolvedDevServerConfig(cwd, config.devServer),
+      testDir
+    }),
+    'utf8'
+  );
 
   const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const args = ['playwright', 'test', '--config', configPath, '--update-snapshots'];
@@ -75,6 +86,7 @@ export async function runBaselineCommand(
 
   return {
     artifactPath: artifact.artifactPath,
+    appUrl: config.appUrl,
     baselineDir,
     configPath,
     testDir,
@@ -84,23 +96,62 @@ export async function runBaselineCommand(
 }
 
 export function createBaselinePlaywrightConfigContents(paths: {
+  appUrl: string;
   baselineDir: string;
+  devServer: SpotterDevServerConfig | null;
   testDir: string;
 }): string {
   const snapshotPathTemplate = normalizeForPlaywrightPath(
     path.join(paths.baselineDir, '{testFilePath}', '{arg}{ext}')
   );
   const testDir = normalizeForPlaywrightPath(paths.testDir);
-
-  return [
+  const lines = [
     "import { defineConfig } from '@playwright/test';",
     '',
     'export default defineConfig({',
     `  testDir: ${JSON.stringify(testDir)},`,
-    `  snapshotPathTemplate: ${JSON.stringify(snapshotPathTemplate)}`,
-    '});',
-    ''
-  ].join('\n');
+    `  snapshotPathTemplate: ${JSON.stringify(snapshotPathTemplate)},`,
+    '  use: {',
+    `    baseURL: ${JSON.stringify(paths.appUrl)}`,
+    '  }'
+  ];
+
+  if (paths.devServer) {
+    lines.push('  ,webServer: {');
+    lines.push(`    command: ${JSON.stringify(paths.devServer.command)},`);
+    if (paths.devServer.cwd) {
+      lines.push(`    cwd: ${JSON.stringify(normalizeForPlaywrightPath(paths.devServer.cwd))},`);
+    }
+    lines.push(`    reuseExistingServer: ${paths.devServer.reuseExistingServer},`);
+    lines.push(`    timeout: ${paths.devServer.timeoutMs},`);
+    lines.push(`    url: ${JSON.stringify(paths.appUrl)}`);
+    lines.push('  }');
+  }
+
+  lines.push('});', '');
+
+  return lines.join('\n');
+}
+
+function createResolvedDevServerConfig(
+  cwd: string,
+  devServer: SpotterDevServerConfig | null
+): SpotterDevServerConfig | null {
+  if (!devServer) {
+    return null;
+  }
+
+  const resolvedDevServer: SpotterDevServerConfig = {
+    command: devServer.command,
+    reuseExistingServer: devServer.reuseExistingServer,
+    timeoutMs: devServer.timeoutMs
+  };
+
+  if (devServer.cwd) {
+    resolvedDevServer.cwd = path.resolve(cwd, devServer.cwd);
+  }
+
+  return resolvedDevServer;
 }
 
 async function runExternalCommand(request: BaselineCommandRunRequest): Promise<BaselineCommandRunResult> {
