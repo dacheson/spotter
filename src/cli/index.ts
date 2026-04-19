@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 
+import { runBaselineCommand, type BaselineCommandResult } from '../playwright/index.js';
+
 export interface CliEnvironment {
   cwd: string;
 }
@@ -21,6 +23,11 @@ export interface CliCommandHandler {
 export interface CliDependencies {
   environment: CliEnvironment;
   handlers: Record<string, CliCommandHandler>;
+}
+
+export interface CreateDefaultCliHandlersOptions {
+  write?: (message: string) => void;
+  runBaseline?: (options: { cwd: string }) => Promise<BaselineCommandResult>;
 }
 
 export const cliCommandDefinitions: CliCommandDefinition[] = [
@@ -53,12 +60,21 @@ export const cliCommandDefinitions: CliCommandDefinition[] = [
 export const plannedCliCommands = cliCommandDefinitions;
 
 export function createDefaultCliHandlers(
-  write: (message: string) => void = (message) => process.stdout.write(`${message}\n`)
+  options: CreateDefaultCliHandlersOptions = {}
 ): Record<string, CliCommandHandler> {
+  const write = options.write ?? ((message: string) => process.stdout.write(`${message}\n`));
+  const runBaseline = options.runBaseline ?? ((baselineOptions: { cwd: string }) => runBaselineCommand(baselineOptions));
+
   return Object.fromEntries(
     cliCommandDefinitions.map((command) => [
       command.name,
       async ({ commandName, environment }) => {
+        if (commandName === 'baseline') {
+          const result = await runBaseline({ cwd: environment.cwd });
+          write(`Baseline screenshots stored in ${result.baselineDir}`);
+          return;
+        }
+
         write(`spotter ${commandName} is not implemented yet. cwd=${environment.cwd}`);
       }
     ])

@@ -21,7 +21,7 @@
 
 ## Sprint 4
 
-* [ ] Implement the baseline command
+* [x] Implement the baseline command
 * [ ] Implement the changed diff command
 * [ ] Store artifacts
 

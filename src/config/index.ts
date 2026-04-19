@@ -61,7 +61,7 @@ export const defaultSpotterConfig: SpotterConfig = {
   locales: defaultLocales,
   paths: {
     artifactsDir: '.spotter/artifacts',
-    screenshotsDir: '.spotter/screenshots',
+    screenshotsDir: '.spotter/baselines',
     testsDir: '.spotter/tests'
   }
 };

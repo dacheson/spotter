@@ -94,6 +94,8 @@ Scenario plans expand across the configured viewport list, which defaults to bot
 
 Generated tests use deterministic screenshot assertions with disabled animations, hidden carets, CSS scaling, and full-page captures.
 
+`spotter baseline` runs `playwright test --update-snapshots` against the generated tests and stores baseline screenshots in the configured `screenshotsDir`, which defaults to `.spotter/baselines`.
+
 ## Example Output
 
 ```txt

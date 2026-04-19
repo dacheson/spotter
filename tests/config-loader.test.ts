@@ -29,7 +29,7 @@ describe('config loader', () => {
     expect(loaded.configPath).toBeNull();
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
-      screenshotsDir: '.spotter/screenshots',
+      screenshotsDir: '.spotter/baselines',
       testsDir: '.spotter/tests'
     });
     expect(loaded.config.viewports).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('config loader', () => {
     ]);
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
-      screenshotsDir: '.spotter/screenshots',
+      screenshotsDir: '.spotter/baselines',
       testsDir: '.generated/spotter/tests'
     });
   });

@@ -28,7 +28,7 @@ describe('project structure', () => {
   it('provides deterministic defaults for future modules', () => {
     expect(defaultSpotterConfig.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
-      screenshotsDir: '.spotter/screenshots',
+      screenshotsDir: '.spotter/baselines',
       testsDir: '.spotter/tests'
     });
     expect(defaultSpotterConfig.viewports).toEqual([
