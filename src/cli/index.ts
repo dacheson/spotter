@@ -145,6 +145,7 @@ export function createDefaultCliHandlers(
             write(line);
           }
 
+          write(`Markdown report written to ${result.markdownPath}`);
           write(`Report artifact read from ${result.artifactPath}`);
           return;
         }

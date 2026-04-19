@@ -118,7 +118,7 @@ Provider responses are now JSON-schema validated before Spotter accepts them, an
 
 The scenario enhancer now routes the validated merged scenario set back through the deterministic priority engine so suggested scenarios come back normalized against the known route and signal context.
 
-The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority.
+The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority, then writes a Markdown report to `artifactsDir/visual-report.md` by default.
 
 ## Example Output
 

@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadSpotterConfig, writeStarterConfig } from '../config/index.js';
-import { renderVisualReportSummary, readVisualReportSummary } from '../reports/index.js';
+import { renderVisualReportSummary, writeVisualReportMarkdown } from '../reports/index.js';
 import {
   createConfiguredScenarioPlan,
   generateDeterministicScenarios,
@@ -41,6 +41,7 @@ export interface GenerateWorkflowResult {
 export interface ReportWorkflowResult {
   artifactPath: string;
   lines: string[];
+  markdownPath: string;
 }
 
 export async function runInitWorkflow(environment: WorkflowEnvironment): Promise<InitWorkflowResult> {
@@ -99,11 +100,12 @@ export async function runGenerateWorkflow(environment: WorkflowEnvironment): Pro
 }
 
 export async function runReportWorkflow(environment: WorkflowEnvironment): Promise<ReportWorkflowResult> {
-  const summary = await readVisualReportSummary({ cwd: environment.cwd });
+  const writtenReport = await writeVisualReportMarkdown({ cwd: environment.cwd });
 
   return {
-    artifactPath: summary.artifactPath,
-    lines: renderVisualReportSummary(summary)
+    artifactPath: writtenReport.summary.artifactPath,
+    lines: renderVisualReportSummary(writtenReport.summary),
+    markdownPath: writtenReport.outputPath
   };
 }
 

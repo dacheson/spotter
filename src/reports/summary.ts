@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
@@ -22,6 +22,16 @@ export interface VisualReportSummary {
 
 export interface ReadVisualReportSummaryOptions {
   cwd?: string;
+}
+
+export interface WriteVisualReportMarkdownOptions extends ReadVisualReportSummaryOptions {
+  outputPath?: string;
+}
+
+export interface WrittenVisualReportMarkdown {
+  markdown: string;
+  outputPath: string;
+  summary: VisualReportSummary;
 }
 
 export async function readVisualReportSummary(
@@ -77,6 +87,62 @@ export function renderVisualReportSummary(summary: VisualReportSummary): string[
   return lines;
 }
 
+export function renderVisualReportMarkdown(summary: VisualReportSummary): string {
+  const groupedCounts = countDiffsByPriority(summary.diffs);
+  const lines = [
+    '# Spotter Visual Report',
+    '',
+    `Status: **${summary.passed ? 'Passed' : 'Failed'}**`,
+    `Generated: ${summary.generatedAt}`,
+    `Changed artifact: ${summary.artifactPath}`,
+    '',
+    '## Summary',
+    '',
+    '| Metric | Value |',
+    '| --- | ---: |',
+    `| Total scenarios | ${summary.totalScenarios} |`,
+    `| Changed scenarios | ${summary.changedScenarios} |`,
+    `| High priority diffs | ${groupedCounts.high} |`,
+    `| Medium priority diffs | ${groupedCounts.medium} |`,
+    `| Low priority diffs | ${groupedCounts.low} |`,
+    `| Unknown priority diffs | ${groupedCounts.unknown} |`
+  ];
+
+  if (summary.diffs.length === 0) {
+    lines.push('', '## Diffs', '', 'No visual diffs were detected.');
+    return lines.join('\n');
+  }
+
+  lines.push('', '## Diffs', '', '| Priority | Scenario | Diff | Baseline | Current |', '| --- | --- | --- | --- | --- |');
+
+  for (const diff of summary.diffs) {
+    lines.push(
+      `| ${diff.priority} | ${escapeMarkdownCell(diff.scenarioName)} | ${escapeMarkdownCell(diff.diffPath)} | ${escapeMarkdownCell(diff.baselinePath)} | ${escapeMarkdownCell(diff.currentPath)} |`
+    );
+  }
+
+  return lines.join('\n');
+}
+
+export async function writeVisualReportMarkdown(
+  options: WriteVisualReportMarkdownOptions = {}
+): Promise<WrittenVisualReportMarkdown> {
+  const cwd = options.cwd ?? process.cwd();
+  const summary = await readVisualReportSummary({ cwd });
+  const { config } = await loadSpotterConfig({ cwd });
+  const outputPath = options.outputPath ?? path.resolve(cwd, config.paths.artifactsDir, 'visual-report.md');
+  const markdown = `${renderVisualReportMarkdown(summary)}\n`;
+
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, markdown, 'utf8');
+
+  return {
+    markdown,
+    outputPath,
+    summary
+  };
+}
+
 async function readJsonFile(filePath: string): Promise<unknown> {
   const contents = await readFile(filePath, 'utf8');
   return JSON.parse(contents) as unknown;
@@ -103,4 +169,8 @@ function countDiffsByPriority(diffs: VisualReportDiff[]): Record<ScenarioPriorit
       unknown: 0
     }
   );
+}
+
+function escapeMarkdownCell(value: string): string {
+  return value.replace(/\|/g, '\\|');
 }

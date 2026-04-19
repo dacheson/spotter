@@ -27,7 +27,8 @@ describe('cli command handlers', () => {
       }),
       runReport: async () => ({
         artifactPath: '/repo/.spotter/artifacts/changed-run.json',
-        lines: ['Changed run failed.', 'High priority diffs: 1.']
+        lines: ['Changed run failed.', 'High priority diffs: 1.'],
+        markdownPath: '/repo/.spotter/artifacts/visual-report.md'
       })
     });
 
@@ -49,6 +50,7 @@ describe('cli command handlers', () => {
       'Scenario plan artifact written to /repo/.spotter/artifacts/scenario-plan.json',
       'Changed run failed.',
       'High priority diffs: 1.',
+      'Markdown report written to /repo/.spotter/artifacts/visual-report.md',
       'Report artifact read from /repo/.spotter/artifacts/changed-run.json'
     ]);
   });

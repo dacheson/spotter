@@ -4,7 +4,12 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readVisualReportSummary, renderVisualReportSummary } from '../src/index.js';
+import {
+  readVisualReportSummary,
+  renderVisualReportMarkdown,
+  renderVisualReportSummary,
+  writeVisualReportMarkdown
+} from '../src/index.js';
 
 const tempDirectories: string[] = [];
 
@@ -94,5 +99,60 @@ describe('visual report summary', () => {
       'Unknown priority diffs: 0.',
       '[high] Checkout Error State: diff.png'
     ]);
+    expect(renderVisualReportMarkdown(summary)).toBe([
+      '# Spotter Visual Report',
+      '',
+      'Status: **Failed**',
+      'Generated: 2026-04-19T12:00:00.000Z',
+      `Changed artifact: ${path.resolve(cwd, '.spotter/artifacts/changed-run.json')}`,
+      '',
+      '## Summary',
+      '',
+      '| Metric | Value |',
+      '| --- | ---: |',
+      '| Total scenarios | 1 |',
+      '| Changed scenarios | 1 |',
+      '| High priority diffs | 1 |',
+      '| Medium priority diffs | 0 |',
+      '| Low priority diffs | 0 |',
+      '| Unknown priority diffs | 0 |',
+      '',
+      '## Diffs',
+      '',
+      '| Priority | Scenario | Diff | Baseline | Current |',
+      '| --- | --- | --- | --- | --- |',
+      '| high | Checkout Error State | diff.png | baseline.png | current.png |'
+    ].join('\n'));
+  });
+
+  it('writes a markdown report artifact by default', async () => {
+    const cwd = await createTempDir();
+
+    await writeJson(cwd, '.spotter/artifacts/changed-run.json', {
+      kind: 'changed',
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      baselineDir: 'C:/repo/.spotter/baselines',
+      configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
+      resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
+      testDir: 'C:/repo/.spotter/tests',
+      command: 'npx',
+      args: ['playwright', 'test', '--config', 'config'],
+      passed: true,
+      summary: {
+        changed: 0,
+        unchanged: 0,
+        artifacts: []
+      }
+    });
+    await writeJson(cwd, '.spotter/artifacts/scenarios.json', {
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      scenarios: []
+    });
+
+    const written = await writeVisualReportMarkdown({ cwd });
+
+    expect(written.outputPath).toBe(path.resolve(cwd, '.spotter/artifacts/visual-report.md'));
+    expect(written.markdown).toContain('# Spotter Visual Report');
+    expect(written.markdown).toContain('No visual diffs were detected.');
   });
 });
