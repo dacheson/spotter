@@ -2,6 +2,21 @@
 
 Spotter automatically discovers UX scenarios in a frontend codebase and turns them into Playwright visual regression coverage with minimal setup.
 
+## Status
+
+Spotter is currently aimed at Next.js repositories and is designed to run as a local dev dependency or through `npx` after publication.
+
+Today it supports:
+
+* Starter config generation
+* Next.js route discovery
+* AST-backed UX state scanning
+* Deterministic scenario generation
+* Playwright screenshot test generation
+* Baseline screenshot capture
+* Changed-run diff collection
+* Markdown report output
+
 ## Why Spotter Exists
 
 Modern applications contain more UI states than teams realistically test by hand. Important states are often implied by code but never captured in regression coverage.
@@ -64,7 +79,8 @@ Execution remains deterministic through generated configuration, Playwright test
 ## Quick Start
 
 ```bash
-npm install -D spotter
+npm install -D spotter @playwright/test
+npx playwright install
 npx spotter init
 npx spotter scan
 npx spotter generate
@@ -73,7 +89,7 @@ npx spotter changed
 npx spotter report
 ```
 
-## Planned CLI Commands
+## Developer Workflow
 
 ```bash
 spotter init
@@ -84,11 +100,47 @@ spotter changed
 spotter report
 ```
 
+What a regular developer does:
+
+1. Run `spotter init` once to create `spotter.config.json`.
+2. Adjust `appUrl` or `devServer` if the app does not run on the defaults.
+3. Run `spotter scan` to discover routes and UI-state signals.
+4. Run `spotter generate` to write deterministic Playwright specs.
+5. Run `spotter baseline` to capture snapshot baselines.
+6. After code changes, run `spotter changed` and then `spotter report`.
+
 The CLI now supports starter config generation, deterministic repository scanning, deterministic Playwright test generation, baseline capture, changed-run comparison, and artifact-backed reporting.
+
+## Install Modes
+
+Install into a project:
+
+```bash
+npm install -D spotter @playwright/test
+```
+
+Run with `npx` after install:
+
+```bash
+npx spotter scan
+```
+
+After the package is published to npm, users can also run it without pre-installing it:
+
+```bash
+npx spotter@latest init
+```
 
 ## Configuration
 
 Spotter looks for `spotter.config.ts` or `spotter.config.json` in the current working directory. If no config file exists, it falls back to built-in defaults for screenshots, generated tests, viewports, and locales.
+
+The default starter config includes:
+
+* `appUrl: "http://127.0.0.1:3000"`
+* `devServer.command: "npm run dev"`
+* `devServer.reuseExistingServer: true`
+* `devServer.timeoutMs: 120000`
 
 Generated Playwright test files are written to the configured `testsDir` path, which defaults to `.spotter/tests`.
 
@@ -97,6 +149,8 @@ Scenario plans expand across the configured viewport list, which defaults to bot
 Generated tests use deterministic screenshot assertions with disabled animations, hidden carets, CSS scaling, and full-page captures.
 
 `spotter baseline` runs `playwright test --update-snapshots` against the generated tests and stores baseline screenshots in the configured `screenshotsDir`, which defaults to `.spotter/baselines`.
+
+That generated Playwright config now also injects `use.baseURL` from `appUrl` and an optional `webServer` block from `devServer`, so the baseline and changed commands can start the app automatically for typical local development.
 
 `spotter changed` reruns the generated tests against those baselines and reports any changed image paths found in the Playwright results output.
 
@@ -119,6 +173,84 @@ Provider responses are now JSON-schema validated before Spotter accepts them, an
 The scenario enhancer now routes the validated merged scenario set back through the deterministic priority engine so suggested scenarios come back normalized against the known route and signal context.
 
 The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority, then writes a Markdown report to `artifactsDir/visual-report.md` by default.
+
+## Generated Output
+
+Spotter writes its working output into the repository so it can be reviewed in git:
+
+* `.spotter/tests` for generated Playwright specs
+* `.spotter/baselines` for screenshot baselines
+* `.spotter/artifacts/route-manifest.json`
+* `.spotter/artifacts/component-signals.json`
+* `.spotter/artifacts/component-heuristics.json`
+* `.spotter/artifacts/scenarios.json`
+* `.spotter/artifacts/scenario-plan.json`
+* `.spotter/artifacts/changed-run.json`
+* `.spotter/artifacts/visual-report.md`
+
+## Example Config
+
+```json
+{
+	"appUrl": "http://127.0.0.1:3000",
+	"devServer": {
+		"command": "npm run dev",
+		"reuseExistingServer": true,
+		"timeoutMs": 120000
+	},
+	"rootDir": ".",
+	"locales": [
+		{
+			"code": "en-US",
+			"label": "English (US)",
+			"rtl": false
+		}
+	],
+	"viewports": [
+		{
+			"name": "desktop",
+			"width": 1440,
+			"height": 900
+		},
+		{
+			"name": "mobile",
+			"width": 390,
+			"height": 844
+		}
+	],
+	"paths": {
+		"artifactsDir": ".spotter/artifacts",
+		"screenshotsDir": ".spotter/baselines",
+		"testsDir": ".spotter/tests"
+	}
+}
+```
+
+If you want Spotter to assume the app is already running, disable automatic startup:
+
+```json
+{
+	"appUrl": "http://127.0.0.1:3000",
+	"devServer": null
+}
+```
+
+## Publishing
+
+The package is already structured for npm distribution:
+
+* `package.json` exposes the CLI through the `bin` field
+* `tsup` builds `dist/cli.js` and `dist/index.js`
+* the public API is exported from `src/index.ts`
+
+To publish it, the remaining operational steps are:
+
+1. Make sure the npm package name is available. If `spotter` is already taken, move to a scoped name such as `@dacheson/spotter`.
+2. Run `npm login`.
+3. Bump the version in `package.json`.
+4. Run `npm run build` and `npm test`.
+5. Publish with `npm publish` or `npm publish --access public` for a scoped package.
+6. Verify with `npx <package-name>@latest --help`.
 
 ## Example Output
 

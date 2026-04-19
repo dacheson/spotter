@@ -3,6 +3,14 @@
   "version": "0.0.0",
   "description": "Deterministic-first CLI for turning frontend UX scenarios into Playwright visual regression coverage.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dacheson/spotter.git"
+  },
+  "homepage": "https://github.com/dacheson/spotter#readme",
+  "bugs": {
+    "url": "https://github.com/dacheson/spotter/issues"
+  },
   "bin": {
     "spotter": "./dist/cli.js"
   },
@@ -29,6 +37,9 @@
     "typescript"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "ajv": "^8.18.0",
     "commander": "^14.0.3",

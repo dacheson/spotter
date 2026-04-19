@@ -49,7 +49,6 @@ spotter/
 ```bash
 spotter init
 spotter scan
-spotter scenarios
 spotter generate
 spotter baseline
 spotter changed
@@ -74,14 +73,26 @@ interface Scenario {
 
 ```ts
 export default {
-  appUrl: 'http://localhost:3000',
-  framework: 'nextjs',
-  locales: ['en', 'ar', 'de'],
-  viewports: ['desktop', 'mobile'],
-  llm: {
-    provider: 'openai',
-    model: 'gpt-5'
-  }
+  appUrl: 'http://127.0.0.1:3000',
+  devServer: {
+    command: 'npm run dev',
+    reuseExistingServer: true,
+    timeoutMs: 120000
+  },
+  locales: [{ code: 'en-US', label: 'English (US)', rtl: false }],
+  viewports: [
+    { name: 'desktop', width: 1440, height: 900 },
+    { name: 'mobile', width: 390, height: 844 }
+  ]
+}
+```
+
+To disable automatic server startup:
+
+```ts
+export default {
+  appUrl: 'http://127.0.0.1:3000',
+  devServer: null
 }
 ```
 

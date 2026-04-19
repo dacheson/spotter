@@ -29,7 +29,7 @@ Repo -> Scan -> Signals -> Scenarios -> Tests -> Screenshots -> Diffs -> Reports
 * ts-morph for AST analysis
 * Playwright
 * Commander.js
-* zod for schemas
+* Ajv for runtime LLM schema validation
 * Optional OpenAI or local LLM providers
 
 ## Discovery Responsibilities
@@ -56,6 +56,7 @@ The Playwright layer should support:
 
 * Screenshot generation
 * Viewport setup
+* Base URL and optional dev server startup
 * Auth fixtures
 * Network interception
 * Locale switching
