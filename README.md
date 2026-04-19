@@ -90,6 +90,8 @@ Spotter looks for `spotter.config.ts` or `spotter.config.json` in the current wo
 
 Generated Playwright test files are written to the configured `testsDir` path, which defaults to `.spotter/tests`.
 
+Scenario plans expand across the configured viewport list, which defaults to both `desktop` and `mobile`.
+
 ## Example Output
 
 ```txt
