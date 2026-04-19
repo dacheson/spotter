@@ -104,6 +104,8 @@ The scanner can now walk TS, TSX, JS, and JSX source files and extract AST-backe
 
 Those findings now feed deterministic loading, error, and form heuristics with scenario tags and recipe hints for the scenario layer.
 
+Scenario priorities are now assigned deterministically from route metadata, tags, heuristics, and auth or role signals.
+
 ## Example Output
 
 ```txt

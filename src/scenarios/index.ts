@@ -1,4 +1,7 @@
 import { loadSpotterConfig } from '../config/index.js';
+
+export * from './priority.js';
+
 import type { LocaleDefinition, ScenarioDefinition, ViewportDefinition } from '../types.js';
 
 export interface ScenarioTarget {
