@@ -106,6 +106,8 @@ Those findings now feed deterministic loading, error, and form heuristics with s
 
 Scenario priorities are now assigned deterministically from route metadata, tags, heuristics, and auth or role signals.
 
+The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for future OpenAI or local model integrations.
+
 ## Example Output
 
 ```txt

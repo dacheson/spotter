@@ -33,6 +33,6 @@
 
 ## Sprint 6
 
-* [ ] Add the LLM provider abstraction
+* [x] Add the LLM provider abstraction
 * [ ] Build the scenario enhancer
 * [ ] Add JSON schema validation
