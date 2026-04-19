@@ -1,6 +1,11 @@
 import { Command } from 'commander';
 
-import { runBaselineCommand, type BaselineCommandResult } from '../playwright/index.js';
+import {
+  runBaselineCommand,
+  runChangedCommand,
+  type BaselineCommandResult,
+  type ChangedCommandResult
+} from '../playwright/index.js';
 
 export interface CliEnvironment {
   cwd: string;
@@ -28,6 +33,7 @@ export interface CliDependencies {
 export interface CreateDefaultCliHandlersOptions {
   write?: (message: string) => void;
   runBaseline?: (options: { cwd: string }) => Promise<BaselineCommandResult>;
+  runChanged?: (options: { cwd: string }) => Promise<ChangedCommandResult>;
 }
 
 export const cliCommandDefinitions: CliCommandDefinition[] = [
@@ -64,6 +70,7 @@ export function createDefaultCliHandlers(
 ): Record<string, CliCommandHandler> {
   const write = options.write ?? ((message: string) => process.stdout.write(`${message}\n`));
   const runBaseline = options.runBaseline ?? ((baselineOptions: { cwd: string }) => runBaselineCommand(baselineOptions));
+  const runChanged = options.runChanged ?? ((changedOptions: { cwd: string }) => runChangedCommand(changedOptions));
 
   return Object.fromEntries(
     cliCommandDefinitions.map((command) => [
@@ -72,6 +79,17 @@ export function createDefaultCliHandlers(
         if (commandName === 'baseline') {
           const result = await runBaseline({ cwd: environment.cwd });
           write(`Baseline screenshots stored in ${result.baselineDir}`);
+          return;
+        }
+
+        if (commandName === 'changed') {
+          const result = await runChanged({ cwd: environment.cwd });
+          write(`Changed run ${result.passed ? 'passed' : 'failed'} with ${result.summary.changed} changed screenshots.`);
+
+          for (const artifact of result.summary.artifacts) {
+            write(`Changed image: ${artifact.diffPath}`);
+          }
+
           return;
         }
 

@@ -96,6 +96,8 @@ Generated tests use deterministic screenshot assertions with disabled animations
 
 `spotter baseline` runs `playwright test --update-snapshots` against the generated tests and stores baseline screenshots in the configured `screenshotsDir`, which defaults to `.spotter/baselines`.
 
+`spotter changed` reruns the generated tests against those baselines and reports any changed image paths found in the Playwright results output.
+
 ## Example Output
 
 ```txt
