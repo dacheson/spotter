@@ -23,7 +23,7 @@
 
 * [x] Implement the baseline command
 * [x] Implement the changed diff command
-* [ ] Store artifacts
+* [x] Store artifacts
 
 ## Sprint 5
 

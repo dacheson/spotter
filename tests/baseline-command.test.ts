@@ -51,10 +51,16 @@ describe('baseline command', () => {
     const runner = vi.fn(async () => ({ exitCode: 0 }));
     const result = await runBaselineCommand({ cwd }, { runner });
     const configContents = await readFile(result.configPath, 'utf8');
+    const artifactContents = await readFile(result.artifactPath, 'utf8');
 
     expect(result.baselineDir).toBe(path.resolve(cwd, '.generated/baselines'));
     expect(result.testDir).toBe(path.resolve(cwd, '.generated/tests'));
+    expect(result.artifactPath).toBe(path.resolve(cwd, '.generated/artifacts/baseline-run.json'));
     expect(configContents).toContain('snapshotPathTemplate');
+    expect(JSON.parse(artifactContents)).toMatchObject({
+      kind: 'baseline',
+      baselineDir: path.resolve(cwd, '.generated/baselines')
+    });
     expect(runner).toHaveBeenCalledWith({
       command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
       args: ['playwright', 'test', '--config', result.configPath, '--update-snapshots'],
@@ -65,6 +71,7 @@ describe('baseline command', () => {
   it('wires the default baseline CLI handler to the baseline runner', async () => {
     const write = vi.fn<(message: string) => void>();
     const runBaseline = vi.fn(async () => ({
+      artifactPath: 'C:/repo/.spotter/artifacts/baseline-run.json',
       baselineDir: 'C:/repo/.spotter/baselines',
       configPath: 'C:/repo/.spotter/artifacts/playwright.baseline.config.mjs',
       testDir: 'C:/repo/.spotter/tests',
@@ -85,5 +92,6 @@ describe('baseline command', () => {
 
     expect(runBaseline).toHaveBeenCalledWith({ cwd: 'C:/repo' });
     expect(write).toHaveBeenCalledWith('Baseline screenshots stored in C:/repo/.spotter/baselines');
+    expect(write).toHaveBeenCalledWith('Baseline artifact written to C:/repo/.spotter/artifacts/baseline-run.json');
   });
 });

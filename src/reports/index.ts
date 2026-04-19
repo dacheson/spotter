@@ -1,5 +1,7 @@
 import type { DiffArtifact } from '../diff/index.js';
 
+export * from './artifacts.js';
+
 export interface ReportSummary {
   generatedAt: string;
   totalScenarios: number;

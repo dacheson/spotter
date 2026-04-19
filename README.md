@@ -98,6 +98,8 @@ Generated tests use deterministic screenshot assertions with disabled animations
 
 `spotter changed` reruns the generated tests against those baselines and reports any changed image paths found in the Playwright results output.
 
+Both commands also persist their latest run metadata as JSON artifacts in the configured `artifactsDir`.
+
 ## Example Output
 
 ```txt

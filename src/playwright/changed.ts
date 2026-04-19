@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
 import { collectDiffSummary, type DiffSummary } from '../diff/index.js';
+import { writeArtifactRecord } from '../reports/index.js';
 import {
   createBaselinePlaywrightConfigContents,
   type BaselineCommandRunRequest,
@@ -19,6 +20,7 @@ export interface ChangedCommandDependencies {
 }
 
 export interface ChangedCommandResult {
+  artifactPath: string;
   baselineDir: string;
   configPath: string;
   resultsDir: string;
@@ -54,8 +56,24 @@ export async function runChangedCommand(
   const runner = dependencies.runner ?? runExternalCommand;
   const runResult = await runner({ command, args, cwd });
   const summary = await collectDiffSummary(resultsDir);
+  const artifact = await writeArtifactRecord(
+    {
+      kind: 'changed',
+      generatedAt: new Date().toISOString(),
+      baselineDir,
+      configPath,
+      resultsDir,
+      testDir,
+      command,
+      args,
+      passed: runResult.exitCode === 0,
+      summary
+    },
+    { cwd }
+  );
 
   return {
+    artifactPath: artifact.artifactPath,
     baselineDir,
     configPath,
     resultsDir,

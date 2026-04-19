@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
+import { writeArtifactRecord } from '../reports/index.js';
 
 export interface BaselineCommandOptions {
   cwd?: string;
@@ -27,6 +28,7 @@ export interface BaselineCommandDependencies {
 }
 
 export interface BaselineCommandResult {
+  artifactPath: string;
   baselineDir: string;
   configPath: string;
   testDir: string;
@@ -58,7 +60,21 @@ export async function runBaselineCommand(
     throw new Error(`Playwright baseline run failed with exit code ${result.exitCode}.`);
   }
 
+  const artifact = await writeArtifactRecord(
+    {
+      kind: 'baseline',
+      generatedAt: new Date().toISOString(),
+      baselineDir,
+      configPath,
+      testDir,
+      command,
+      args
+    },
+    { cwd }
+  );
+
   return {
+    artifactPath: artifact.artifactPath,
     baselineDir,
     configPath,
     testDir,

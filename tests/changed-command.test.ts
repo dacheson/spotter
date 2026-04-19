@@ -80,10 +80,17 @@ describe('changed command', () => {
 
     const result = await runChangedCommand({ cwd }, { runner });
     const configContents = await readFile(result.configPath, 'utf8');
+    const artifactContents = await readFile(result.artifactPath, 'utf8');
 
     expect(result.passed).toBe(false);
     expect(result.summary.changed).toBe(1);
+    expect(result.artifactPath).toBe(path.resolve(cwd, '.generated/artifacts/changed-run.json'));
     expect(configContents).toContain('outputDir:');
+    expect(JSON.parse(artifactContents)).toMatchObject({
+      kind: 'changed',
+      passed: false,
+      resultsDir: path.resolve(cwd, '.generated/artifacts/playwright-results')
+    });
     expect(runner).toHaveBeenCalledWith({
       command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
       args: ['playwright', 'test', '--config', result.configPath],
@@ -94,6 +101,7 @@ describe('changed command', () => {
   it('wires the changed CLI handler to report pass or fail and changed image paths', async () => {
     const write = vi.fn<(message: string) => void>();
     const runChanged = vi.fn(async () => ({
+      artifactPath: 'C:/repo/.spotter/artifacts/changed-run.json',
       baselineDir: 'C:/repo/.spotter/baselines',
       configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
       resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
@@ -128,6 +136,7 @@ describe('changed command', () => {
 
     expect(runChanged).toHaveBeenCalledWith({ cwd: 'C:/repo' });
     expect(write).toHaveBeenCalledWith('Changed run failed with 1 changed screenshots.');
+    expect(write).toHaveBeenCalledWith('Changed artifact written to C:/repo/.spotter/artifacts/changed-run.json');
     expect(write).toHaveBeenCalledWith('Changed image: diff.png');
   });
 

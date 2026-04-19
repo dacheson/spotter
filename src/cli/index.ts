@@ -79,12 +79,14 @@ export function createDefaultCliHandlers(
         if (commandName === 'baseline') {
           const result = await runBaseline({ cwd: environment.cwd });
           write(`Baseline screenshots stored in ${result.baselineDir}`);
+          write(`Baseline artifact written to ${result.artifactPath}`);
           return;
         }
 
         if (commandName === 'changed') {
           const result = await runChanged({ cwd: environment.cwd });
           write(`Changed run ${result.passed ? 'passed' : 'failed'} with ${result.summary.changed} changed screenshots.`);
+          write(`Changed artifact written to ${result.artifactPath}`);
 
           for (const artifact of result.summary.artifacts) {
             write(`Changed image: ${artifact.diffPath}`);
