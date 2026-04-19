@@ -84,6 +84,10 @@ spotter report
 
 The CLI shell is wired with Commander.js and currently exposes the baseline command surface with placeholder handlers while the underlying features are built incrementally.
 
+## Configuration
+
+Spotter looks for `spotter.config.ts` or `spotter.config.json` in the current working directory. If no config file exists, it falls back to built-in defaults for screenshots, generated tests, viewports, and locales.
+
 ## Example Output
 
 ```txt
