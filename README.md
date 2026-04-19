@@ -67,8 +67,10 @@ Execution remains deterministic through generated configuration, Playwright test
 npm install -D spotter
 npx spotter init
 npx spotter scan
+npx spotter generate
 npx spotter baseline
 npx spotter changed
+npx spotter report
 ```
 
 ## Planned CLI Commands
@@ -82,7 +84,7 @@ spotter changed
 spotter report
 ```
 
-The CLI shell is wired with Commander.js and currently exposes the baseline command surface with placeholder handlers while the underlying features are built incrementally.
+The CLI now supports starter config generation, deterministic repository scanning, deterministic Playwright test generation, baseline capture, changed-run comparison, and artifact-backed reporting.
 
 ## Configuration
 
@@ -104,13 +106,19 @@ The scanner can now walk TS, TSX, JS, and JSX source files and extract AST-backe
 
 Those findings now feed deterministic loading, error, and form heuristics with scenario tags and recipe hints for the scenario layer.
 
+The `scan` command writes route, signal, heuristic, and summary artifacts into the configured `artifactsDir` so later steps can stay reviewable in git.
+
 Scenario priorities are now assigned deterministically from route metadata, tags, heuristics, and auth or role signals.
+
+The `generate` command turns the current route and state scan into deterministic scenarios, expands them across configured locales and viewports, writes the generated Playwright tests, and stores scenario artifacts alongside the scan output.
 
 The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for future OpenAI or local model integrations.
 
 Provider responses are now JSON-schema validated before Spotter accepts them, and the enhancer deduplicates LLM suggestions against deterministic scenarios while capping how many generated additions are merged in.
 
 The scenario enhancer now routes the validated merged scenario set back through the deterministic priority engine so suggested scenarios come back normalized against the known route and signal context.
+
+The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority.
 
 ## Example Output
 

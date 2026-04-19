@@ -4,6 +4,7 @@ export * from './nextjs.js';
 export * from './manifest.js';
 export * from './signals.js';
 export * from './heuristics.js';
+export * from './workspace.js';
 
 export interface RepositoryMetadata {
   rootDir: string;

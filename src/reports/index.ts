@@ -1,6 +1,7 @@
 import type { DiffArtifact } from '../diff/index.js';
 
 export * from './artifacts.js';
+export * from './summary.js';
 
 export interface ReportSummary {
   generatedAt: string;

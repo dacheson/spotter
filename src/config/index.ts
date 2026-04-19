@@ -1,4 +1,5 @@
 import { access, readFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { createJiti } from 'jiti';
@@ -32,6 +33,16 @@ export interface LoadSpotterConfigOptions {
 export interface LoadedSpotterConfig {
   config: SpotterConfig;
   configPath: string | null;
+}
+
+export interface WriteStarterConfigOptions {
+  cwd?: string;
+  fileName?: (typeof supportedConfigFileNames)[number];
+}
+
+export interface WrittenStarterConfig {
+  config: SpotterConfig;
+  configPath: string;
 }
 
 export const defaultViewports: ViewportDefinition[] = [
@@ -151,6 +162,28 @@ export async function loadSpotterConfig(
 
   return {
     config: mergeSpotterConfig(loadedConfig),
+    configPath
+  };
+}
+
+export async function writeStarterConfig(
+  options: WriteStarterConfigOptions = {}
+): Promise<WrittenStarterConfig> {
+  const cwd = options.cwd ?? process.cwd();
+  const existingConfigPath = await findSpotterConfigFile(cwd);
+
+  if (existingConfigPath) {
+    throw new Error(`Spotter config already exists at ${existingConfigPath}.`);
+  }
+
+  const config = mergeSpotterConfig();
+  const configPath = path.join(cwd, options.fileName ?? 'spotter.config.json');
+
+  await mkdir(path.dirname(configPath), { recursive: true });
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+
+  return {
+    config,
     configPath
   };
 }

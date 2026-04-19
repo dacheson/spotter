@@ -6,6 +6,16 @@ import {
   type BaselineCommandResult,
   type ChangedCommandResult
 } from '../playwright/index.js';
+import {
+  runGenerateWorkflow,
+  runInitWorkflow,
+  runReportWorkflow,
+  runScanWorkflow,
+  type GenerateWorkflowResult,
+  type InitWorkflowResult,
+  type ReportWorkflowResult,
+  type ScanWorkflowResult
+} from './workflows.js';
 
 export interface CliEnvironment {
   cwd: string;
@@ -31,9 +41,13 @@ export interface CliDependencies {
 }
 
 export interface CreateDefaultCliHandlersOptions {
+  runGenerate?: (options: { cwd: string }) => Promise<GenerateWorkflowResult>;
+  runInit?: (options: { cwd: string }) => Promise<InitWorkflowResult>;
   write?: (message: string) => void;
   runBaseline?: (options: { cwd: string }) => Promise<BaselineCommandResult>;
   runChanged?: (options: { cwd: string }) => Promise<ChangedCommandResult>;
+  runReport?: (options: { cwd: string }) => Promise<ReportWorkflowResult>;
+  runScan?: (options: { cwd: string }) => Promise<ScanWorkflowResult>;
 }
 
 export const cliCommandDefinitions: CliCommandDefinition[] = [
@@ -69,13 +83,42 @@ export function createDefaultCliHandlers(
   options: CreateDefaultCliHandlersOptions = {}
 ): Record<string, CliCommandHandler> {
   const write = options.write ?? ((message: string) => process.stdout.write(`${message}\n`));
+  const runInit = options.runInit ?? ((initOptions: { cwd: string }) => runInitWorkflow(initOptions));
+  const runScan = options.runScan ?? ((scanOptions: { cwd: string }) => runScanWorkflow(scanOptions));
+  const runGenerate = options.runGenerate ?? ((generateOptions: { cwd: string }) => runGenerateWorkflow(generateOptions));
   const runBaseline = options.runBaseline ?? ((baselineOptions: { cwd: string }) => runBaselineCommand(baselineOptions));
   const runChanged = options.runChanged ?? ((changedOptions: { cwd: string }) => runChangedCommand(changedOptions));
+  const runReport = options.runReport ?? ((reportOptions: { cwd: string }) => runReportWorkflow(reportOptions));
 
   return Object.fromEntries(
     cliCommandDefinitions.map((command) => [
       command.name,
       async ({ commandName, environment }) => {
+        if (commandName === 'init') {
+          const result = await runInit({ cwd: environment.cwd });
+          write(`Starter config written to ${result.configPath}`);
+          return;
+        }
+
+        if (commandName === 'scan') {
+          const result = await runScan({ cwd: environment.cwd });
+          write(`Detected ${result.routeCount} routes and ${result.signalCount} signals.`);
+          write(`Route manifest written to ${result.routeManifestPath}`);
+          write(`Signal artifact written to ${result.signalsPath}`);
+          write(`Heuristic artifact written to ${result.heuristicsPath}`);
+          write(`Scan summary written to ${result.summaryPath}`);
+          return;
+        }
+
+        if (commandName === 'generate') {
+          const result = await runGenerate({ cwd: environment.cwd });
+          write(`Generated ${result.testFileCount} Playwright test files from ${result.scenariosCount} scenarios.`);
+          write(`Generated tests written to ${result.outputDir}`);
+          write(`Scenario artifact written to ${result.scenariosArtifactPath}`);
+          write(`Scenario plan artifact written to ${result.planArtifactPath}`);
+          return;
+        }
+
         if (commandName === 'baseline') {
           const result = await runBaseline({ cwd: environment.cwd });
           write(`Baseline screenshots stored in ${result.baselineDir}`);
@@ -92,6 +135,17 @@ export function createDefaultCliHandlers(
             write(`Changed image: ${artifact.diffPath}`);
           }
 
+          return;
+        }
+
+        if (commandName === 'report') {
+          const result = await runReport({ cwd: environment.cwd });
+
+          for (const line of result.lines) {
+            write(line);
+          }
+
+          write(`Report artifact read from ${result.artifactPath}`);
           return;
         }
 
