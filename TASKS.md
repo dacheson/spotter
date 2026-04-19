@@ -9,7 +9,7 @@
 
 ## Sprint 2
 
-* [ ] Detect Next.js routes
+* [x] Detect Next.js routes
 * [ ] Output a route manifest JSON file
 * [ ] Handle dynamic routes
 
