@@ -1,0 +1,39 @@
+{
+  "name": "spotter",
+  "version": "0.0.0",
+  "description": "Deterministic-first CLI for turning frontend UX scenarios into Playwright visual regression coverage.",
+  "type": "module",
+  "bin": {
+    "spotter": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "playwright",
+    "visual-regression",
+    "cli",
+    "nextjs",
+    "typescript"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.2.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
