@@ -17,7 +17,7 @@
 
 * [x] Generate Playwright tests
 * [x] Add desktop and mobile viewports
-* [ ] Add screenshot assertions
+* [x] Add screenshot assertions
 
 ## Sprint 4
 

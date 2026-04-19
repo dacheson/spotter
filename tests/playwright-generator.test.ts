@@ -4,7 +4,13 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { generatePlaywrightTestFiles, writeGeneratedPlaywrightTests, type ScenarioPlan } from '../src/index.js';
+import {
+  defaultScreenshotAssertionOptions,
+  generatePlaywrightTestFiles,
+  renderScreenshotAssertion,
+  writeGeneratedPlaywrightTests,
+  type ScenarioPlan
+} from '../src/index.js';
 
 const tempDirectories: string[] = [];
 
@@ -76,7 +82,12 @@ describe('playwright generator', () => {
           '',
           "  test('checkout-empty-cart', async ({ page }) => {",
           "    await page.goto('/checkout');",
-          "    await expect(page).toHaveScreenshot('checkout-empty-cart-mobile-en-US.png');",
+          "    await expect(page).toHaveScreenshot('checkout-empty-cart-mobile-en-US.png', {",
+          "      animations: 'disabled',",
+          "      caret: 'hide',",
+          '      fullPage: true,',
+          "      scale: 'css'",
+          '    });',
           '  });',
           '});',
           ''
@@ -107,7 +118,7 @@ describe('playwright generator', () => {
 
     expect(written.outputDir).toBe(path.resolve(cwd, '.generated/tests'));
     expect(contents).toContain("test('checkout-empty-cart', async ({ page }) => {");
-    expect(contents).toContain("await expect(page).toHaveScreenshot('checkout-empty-cart-mobile-en-US.png');");
+    expect(contents).toContain("await expect(page).toHaveScreenshot('checkout-empty-cart-mobile-en-US.png', {");
   });
 
   it('supports overriding the output directory', async () => {
@@ -118,5 +129,23 @@ describe('playwright generator', () => {
 
     expect(written.outputDir).toBe(outputDir);
     expect(written.files[0]?.filePath).toBe('custom-tests/checkout-checkout-empty-cart.spec.ts');
+  });
+
+  it('renders deterministic screenshot assertion options', () => {
+    expect(defaultScreenshotAssertionOptions).toEqual({
+      animations: 'disabled',
+      caret: 'hide',
+      fullPage: true,
+      scale: 'css'
+    });
+
+    expect(renderScreenshotAssertion('checkout.png')).toBe([
+      "await expect(page).toHaveScreenshot('checkout.png', {",
+      "      animations: 'disabled',",
+      "      caret: 'hide',",
+      '      fullPage: true,',
+      "      scale: 'css'",
+      '    });'
+    ].join('\n'));
   });
 });

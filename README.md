@@ -92,6 +92,8 @@ Generated Playwright test files are written to the configured `testsDir` path, w
 
 Scenario plans expand across the configured viewport list, which defaults to both `desktop` and `mobile`.
 
+Generated tests use deterministic screenshot assertions with disabled animations, hidden carets, CSS scaling, and full-page captures.
+
 ## Example Output
 
 ```txt

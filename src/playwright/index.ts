@@ -18,6 +18,20 @@ export interface GeneratedTestFile {
   contents: string;
 }
 
+export interface ScreenshotAssertionOptions {
+  animations: 'allow' | 'disabled';
+  caret: 'hide' | 'initial';
+  fullPage: boolean;
+  scale: 'css' | 'device';
+}
+
+export const defaultScreenshotAssertionOptions: ScreenshotAssertionOptions = {
+  animations: 'disabled',
+  caret: 'hide',
+  fullPage: true,
+  scale: 'css'
+};
+
 export interface GeneratePlaywrightTestsOptions {
   testDir?: string;
 }
@@ -81,6 +95,7 @@ function renderPlaywrightTestFile(item: ScenarioPlanItem): string {
   const screenshotName = `${item.scenario.id}-${item.target.viewport.name}-${item.target.locale.code}.png`;
   const testName = escapeSingleQuotedString(item.scenario.id);
   const routePath = escapeSingleQuotedString(item.scenario.routePath);
+  const screenshotAssertion = renderScreenshotAssertion(screenshotName);
 
   return [
     "import { expect, test } from '@playwright/test';",
@@ -90,10 +105,24 @@ function renderPlaywrightTestFile(item: ScenarioPlanItem): string {
     '',
     `  test('${testName}', async ({ page }) => {`,
     `    await page.goto('${routePath}');`,
-    `    await expect(page).toHaveScreenshot('${escapeSingleQuotedString(screenshotName)}');`,
+    `    ${screenshotAssertion}`,
     '  });',
     '});',
     ''
+  ].join('\n');
+}
+
+export function renderScreenshotAssertion(
+  screenshotName: string,
+  assertionOptions: ScreenshotAssertionOptions = defaultScreenshotAssertionOptions
+): string {
+  return [
+    `await expect(page).toHaveScreenshot('${escapeSingleQuotedString(screenshotName)}', {`,
+    `      animations: '${assertionOptions.animations}',`,
+    `      caret: '${assertionOptions.caret}',`,
+    `      fullPage: ${assertionOptions.fullPage},`,
+    `      scale: '${assertionOptions.scale}'`,
+    '    });'
   ].join('\n');
 }
 
