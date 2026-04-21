@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
 import type { SpotterDevServerConfig } from '../config/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
+import { createNpxCommand, runExternalCommand } from './command.js';
 
 export interface BaselineCommandOptions {
   cwd?: string;
@@ -56,14 +56,16 @@ export async function runBaselineCommand(
     createBaselinePlaywrightConfigContents({
       appUrl: config.appUrl,
       baselineDir,
+      configDir: artifactsDir,
       devServer: createResolvedDevServerConfig(cwd, config.devServer),
       testDir
     }),
     'utf8'
   );
 
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const args = ['playwright', 'test', '--config', configPath, '--update-snapshots'];
+  const externalCommand = createNpxCommand(['playwright', 'test', '--config', configPath, '--update-snapshots']);
+  const command = externalCommand.command;
+  const args = externalCommand.args;
   const runner = dependencies.runner ?? runExternalCommand;
   const result = await runner({ command, args, cwd });
 
@@ -98,13 +100,15 @@ export async function runBaselineCommand(
 export function createBaselinePlaywrightConfigContents(paths: {
   appUrl: string;
   baselineDir: string;
+  configDir: string;
   devServer: SpotterDevServerConfig | null;
   testDir: string;
 }): string {
-  const snapshotPathTemplate = normalizeForPlaywrightPath(
+  const snapshotPathTemplate = createConfigRelativePlaywrightPath(
+    paths.configDir,
     path.join(paths.baselineDir, '{testFilePath}', '{arg}{ext}')
   );
-  const testDir = normalizeForPlaywrightPath(paths.testDir);
+  const testDir = createConfigRelativePlaywrightPath(paths.configDir, paths.testDir);
   const lines = [
     "import { defineConfig } from '@playwright/test';",
     '',
@@ -120,7 +124,7 @@ export function createBaselinePlaywrightConfigContents(paths: {
     lines.push('  ,webServer: {');
     lines.push(`    command: ${JSON.stringify(paths.devServer.command)},`);
     if (paths.devServer.cwd) {
-      lines.push(`    cwd: ${JSON.stringify(normalizeForPlaywrightPath(paths.devServer.cwd))},`);
+      lines.push(`    cwd: ${JSON.stringify(createConfigRelativePlaywrightPath(paths.configDir, paths.devServer.cwd))},`);
     }
     lines.push(`    reuseExistingServer: ${paths.devServer.reuseExistingServer},`);
     lines.push(`    timeout: ${paths.devServer.timeoutMs},`);
@@ -154,22 +158,17 @@ function createResolvedDevServerConfig(
   return resolvedDevServer;
 }
 
-async function runExternalCommand(request: BaselineCommandRunRequest): Promise<BaselineCommandRunResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(request.command, request.args, {
-      cwd: request.cwd,
-      stdio: 'inherit'
-    });
-
-    child.on('error', reject);
-    child.on('close', (exitCode) => {
-      resolve({
-        exitCode: exitCode ?? 1
-      });
-    });
-  });
-}
-
 function normalizeForPlaywrightPath(value: string): string {
   return value.split(path.sep).join('/');
+}
+
+function createConfigRelativePlaywrightPath(configDir: string, targetPath: string): string {
+  const relativePath = path.relative(configDir, targetPath);
+  const normalizedPath = normalizeForPlaywrightPath(relativePath || '.');
+
+  if (normalizedPath === '.' || normalizedPath.startsWith('../')) {
+    return normalizedPath;
+  }
+
+  return `./${normalizedPath}`;
 }

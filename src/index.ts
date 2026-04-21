@@ -1,8 +1,8 @@
-export const projectName = 'spotter';
-export const packageVersion = '0.0.0';
+export * from './metadata.js';
 
 export * from './types.js';
 export * from './cli/index.js';
+export * from './cli/workflows.js';
 export * from './config/index.js';
 export * from './diff/index.js';
 export * from './llm/index.js';

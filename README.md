@@ -4,12 +4,12 @@ Spotter automatically discovers UX scenarios in a frontend codebase and turns th
 
 ## Status
 
-Spotter is currently aimed at Next.js repositories and is designed to run as a local dev dependency or through `npx` after publication.
+Spotter is designed to run as a local dev dependency or through `npx` after publication.
 
 Today it supports:
 
 * Starter config generation
-* Next.js route discovery
+* Deterministic route discovery adapters for Next.js, Remix, Nuxt, React Router, and Vue Router repositories
 * AST-backed UX state scanning
 * Deterministic scenario generation
 * Playwright screenshot test generation
@@ -61,6 +61,16 @@ Instead of manually clicking through flows to figure out what changed, developer
 * Mobile, locale, and RTL coverage
 * LLM-assisted scenario discovery
 
+Current route-discovery support is strongest for frameworks with deterministic route declarations or file-based routing.
+
+- Next.js app router and pages router
+- Remix flat-file routes
+- Nuxt pages routes
+- React Router route config and `<Route path=...>` declarations
+- Vue Router route config declarations
+
+When Spotter cannot deterministically infer routes, `spotter scan` and `spotter generate` now say that explicitly. Spotter still scans component UX signals, and route-based scenarios are only generated from deterministic adapters or an explicitly supplied LLM fallback provider.
+
 ## Philosophy
 
 Spotter is not AI generating arbitrary tests.
@@ -79,7 +89,7 @@ Execution remains deterministic through generated configuration, Playwright test
 ## Quick Start
 
 ```bash
-npm install -D spotter @playwright/test
+npm install -D @dcacheson/spotter @playwright/test
 npx playwright install
 npx spotter init
 npx spotter scan
@@ -116,7 +126,7 @@ The CLI now supports starter config generation, deterministic repository scannin
 Install into a project:
 
 ```bash
-npm install -D spotter @playwright/test
+npm install -D @dcacheson/spotter @playwright/test
 ```
 
 Run with `npx` after install:
@@ -128,7 +138,7 @@ npx spotter scan
 After the package is published to npm, users can also run it without pre-installing it:
 
 ```bash
-npx spotter@latest init
+npx @dcacheson/spotter@latest init
 ```
 
 ## Configuration
@@ -141,6 +151,7 @@ The default starter config includes:
 * `devServer.command: "npm run dev"`
 * `devServer.reuseExistingServer: true`
 * `devServer.timeoutMs: 120000`
+* `llm.fallback: null`
 
 Generated Playwright test files are written to the configured `testsDir` path, which defaults to `.spotter/tests`.
 
@@ -156,21 +167,27 @@ That generated Playwright config now also injects `use.baseURL` from `appUrl` an
 
 Both commands also persist their latest run metadata as JSON artifacts in the configured `artifactsDir`.
 
-The scanner can now walk TS, TSX, JS, and JSX source files and extract AST-backed state signals such as loading, error, empty, modal, form, auth, and role checks.
+The scanner can now walk TS, TSX, JS, JSX, and Vue single-file components and extract deterministic state signals such as loading, error, empty, modal, form, auth, and role checks.
 
 Those findings now feed deterministic loading, error, and form heuristics with scenario tags and recipe hints for the scenario layer.
 
 The `scan` command writes route, signal, heuristic, and summary artifacts into the configured `artifactsDir` so later steps can stay reviewable in git.
 
+When no deterministic routes are found, the scan summary now also records the inferred framework and the CLI surfaces a warning instead of silently producing an empty route inventory.
+
 Scenario priorities are now assigned deterministically from route metadata, tags, heuristics, and auth or role signals.
 
 The `generate` command turns the current route and state scan into deterministic scenarios, expands them across configured locales and viewports, writes the generated Playwright tests, and stores scenario artifacts alongside the scan output.
 
-The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for future OpenAI or local model integrations.
+If deterministic route discovery returns no routes, the default generate flow now says that clearly. Users can now enable an LLM fallback through `spotter.config.*` or per-run `spotter generate` flags so Spotter can infer scenarios from scanned UX signals when deterministic adapters are insufficient.
+
+The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for OpenAI-compatible remote or local model integrations.
 
 Provider responses are now JSON-schema validated before Spotter accepts them, and the enhancer deduplicates LLM suggestions against deterministic scenarios while capping how many generated additions are merged in.
 
 The scenario enhancer now routes the validated merged scenario set back through the deterministic priority engine so suggested scenarios come back normalized against the known route and signal context.
+
+The `generate` command now accepts `--llm-fallback`, `--llm-provider`, `--llm-model`, `--llm-base-url`, `--llm-api-key-env`, `--llm-instructions`, and `--llm-max-generated-scenarios` so teams can opt into fallback inference without changing code.
 
 The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority, then writes a Markdown report to `artifactsDir/visual-report.md` by default.
 
@@ -197,6 +214,9 @@ Spotter writes its working output into the repository so it can be reviewed in g
 		"command": "npm run dev",
 		"reuseExistingServer": true,
 		"timeoutMs": 120000
+	},
+	"llm": {
+		"fallback": null
 	},
 	"rootDir": ".",
 	"locales": [
@@ -235,6 +255,25 @@ If you want Spotter to assume the app is already running, disable automatic star
 }
 ```
 
+If you want `generate` to fall back to an LLM when deterministic route adapters find no routes, configure it explicitly:
+
+```json
+{
+	"llm": {
+		"fallback": {
+			"enabled": true,
+			"provider": "local",
+			"model": "llama3.1",
+			"baseUrl": "http://127.0.0.1:11434/v1",
+			"instructions": "Prefer scenarios implied by explicit empty, loading, and auth states.",
+			"maxGeneratedScenarios": 4
+		}
+	}
+}
+```
+
+You can also override those settings for one run with `spotter generate --llm-fallback --llm-provider openai --llm-model gpt-5.4` and the related `--llm-*` flags.
+
 ## Publishing
 
 The package is already structured for npm distribution:
@@ -245,12 +284,11 @@ The package is already structured for npm distribution:
 
 To publish it, the remaining operational steps are:
 
-1. Make sure the npm package name is available. If `spotter` is already taken, move to a scoped name such as `@dacheson/spotter`.
-2. Run `npm login`.
-3. Bump the version in `package.json`.
-4. Run `npm run build` and `npm test`.
-5. Publish with `npm publish` or `npm publish --access public` for a scoped package.
-6. Verify with `npx <package-name>@latest --help`.
+1. Run `npm login`.
+2. Bump the version in `package.json`.
+3. Run `npm run typecheck`, `npm test`, and `npm run build`.
+4. Publish with `npm publish --access public`.
+5. Verify with `npx @dcacheson/spotter@latest --help`.
 
 ## Example Output
 
@@ -267,7 +305,7 @@ Impacted by current PR:
 
 ## Ideal Users
 
-* React and Next.js teams
+* Teams using Next.js, Remix, Nuxt, React Router, or Vue Router
 * SaaS startups without dedicated QA
 * Monorepos with many contributors
 * Agencies shipping multiple frontend projects

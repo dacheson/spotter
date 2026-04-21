@@ -20,7 +20,7 @@ export interface PrioritizeScenariosOptions {
 }
 
 const highPriorityTagPattern = /auth|role|admin|permission|payment|checkout|security/i;
-const mediumPriorityTagPattern = /error|form|validation|loading|empty|modal/i;
+const mediumPriorityTagPattern = /error|form|validation|loading|empty|modal|success|feature|responsive|localization|locale|rtl|i18n/i;
 const highPriorityRoutePattern = /checkout|payment|billing|account|admin|settings/i;
 
 export function prioritizeScenarios(

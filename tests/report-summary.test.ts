@@ -155,4 +155,12 @@ describe('visual report summary', () => {
     expect(written.markdown).toContain('# Spotter Visual Report');
     expect(written.markdown).toContain('No visual diffs were detected.');
   });
+
+  it('reports a clear error when the changed artifact is missing', async () => {
+    const cwd = await createTempDir();
+
+    await expect(readVisualReportSummary({ cwd })).rejects.toThrow(
+      "No changed-run artifact found. Run 'spotter changed' first."
+    );
+  });
 });

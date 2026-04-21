@@ -11,6 +11,7 @@ import {
   type BaselineCommandRunResult,
   type BaselineCommandRunner
 } from './baseline.js';
+import { createNpxCommand, runExternalCommand } from './command.js';
 
 export interface ChangedCommandOptions {
   cwd?: string;
@@ -52,6 +53,7 @@ export async function runChangedCommand(
     createChangedPlaywrightConfigContents({
       appUrl: config.appUrl,
       baselineDir,
+      configDir: artifactsDir,
       devServer: config.devServer,
       testDir,
       resultsDir
@@ -59,8 +61,9 @@ export async function runChangedCommand(
     'utf8'
   );
 
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const args = ['playwright', 'test', '--config', configPath];
+  const externalCommand = createNpxCommand(['playwright', 'test', '--config', configPath]);
+  const command = externalCommand.command;
+  const args = externalCommand.args;
   const runner = dependencies.runner ?? runExternalCommand;
   const runResult = await runner({ command, args, cwd });
   const summary = await collectDiffSummary(resultsDir);
@@ -97,6 +100,7 @@ export async function runChangedCommand(
 export function createChangedPlaywrightConfigContents(paths: {
   appUrl: string;
   baselineDir: string;
+  configDir: string;
   devServer: SpotterDevServerConfig | null;
   testDir: string;
   resultsDir: string;
@@ -104,32 +108,22 @@ export function createChangedPlaywrightConfigContents(paths: {
   const baselineConfig = createBaselinePlaywrightConfigContents({
     appUrl: paths.appUrl,
     baselineDir: paths.baselineDir,
+    configDir: paths.configDir,
     devServer: paths.devServer,
     testDir: paths.testDir
   }).trimEnd();
-  const outputDir = normalizeForPlaywrightPath(paths.resultsDir);
+  const outputDir = createConfigRelativePlaywrightPath(paths.configDir, paths.resultsDir);
 
   return `${baselineConfig.slice(0, -3)}  outputDir: ${JSON.stringify(outputDir)}\n});\n`;
 }
 
-async function runExternalCommand(request: BaselineCommandRunRequest): Promise<BaselineCommandRunResult> {
-  const { spawn } = await import('node:child_process');
+function createConfigRelativePlaywrightPath(configDir: string, targetPath: string): string {
+  const relativePath = path.relative(configDir, targetPath);
+  const normalizedPath = relativePath.split(path.sep).join('/') || '.';
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(request.command, request.args, {
-      cwd: request.cwd,
-      stdio: 'inherit'
-    });
+  if (normalizedPath === '.' || normalizedPath.startsWith('../')) {
+    return normalizedPath;
+  }
 
-    child.on('error', reject);
-    child.on('close', (exitCode) => {
-      resolve({
-        exitCode: exitCode ?? 1
-      });
-    });
-  });
-}
-
-function normalizeForPlaywrightPath(value: string): string {
-  return value.split(path.sep).join('/');
+  return `./${normalizedPath}`;
 }

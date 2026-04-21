@@ -39,6 +39,34 @@ describe('deterministic scenarios', () => {
         filePath: 'app/checkout/page.tsx',
         line: 5,
         evidence: 'user'
+      },
+      {
+        kind: 'success',
+        identifier: 'submitted',
+        filePath: 'app/checkout/page.tsx',
+        line: 6,
+        evidence: 'submitted'
+      },
+      {
+        kind: 'feature',
+        identifier: 'betaFlag',
+        filePath: 'app/checkout/page.tsx',
+        line: 7,
+        evidence: 'betaFlag'
+      },
+      {
+        kind: 'responsive',
+        identifier: 'breakpoint',
+        filePath: 'app/checkout/page.tsx',
+        line: 8,
+        evidence: "breakpoint === 'mobile'"
+      },
+      {
+        kind: 'locale',
+        identifier: 'locale',
+        filePath: 'app/checkout/page.tsx',
+        line: 9,
+        evidence: "locale === 'ar'"
       }
     ];
 
@@ -60,6 +88,42 @@ describe('deterministic scenarios', () => {
         evidence: 'form',
         tags: ['form', 'validation'],
         recipes: ['submit-invalid-form']
+      },
+      {
+        kind: 'success',
+        filePath: 'app/checkout/page.tsx',
+        line: 6,
+        identifier: 'submitted',
+        evidence: 'submitted',
+        tags: ['success'],
+        recipes: ['assert-success-state']
+      },
+      {
+        kind: 'feature',
+        filePath: 'app/checkout/page.tsx',
+        line: 7,
+        identifier: 'betaFlag',
+        evidence: 'betaFlag',
+        tags: ['feature-flag'],
+        recipes: ['toggle-feature-flag']
+      },
+      {
+        kind: 'responsive',
+        filePath: 'app/checkout/page.tsx',
+        line: 8,
+        identifier: 'breakpoint',
+        evidence: "breakpoint === 'mobile'",
+        tags: ['responsive'],
+        recipes: ['toggle-responsive-layout']
+      },
+      {
+        kind: 'locale',
+        filePath: 'app/checkout/page.tsx',
+        line: 9,
+        identifier: 'locale',
+        evidence: "locale === 'ar'",
+        tags: ['localization'],
+        recipes: ['switch-locale']
       }
     ]);
     const signalKindsByRoute = mapSignalKindsToRoutes(routes, findings);
@@ -86,11 +150,39 @@ describe('deterministic scenarios', () => {
         tags: ['checkout']
       },
       {
+        id: 'checkout-feature-flag',
+        routePath: '/checkout',
+        name: 'Checkout Feature Flag',
+        priority: 'high',
+        tags: ['checkout', 'feature-flag']
+      },
+      {
         id: 'checkout-loading-state',
         routePath: '/checkout',
         name: 'Checkout Loading State',
         priority: 'high',
         tags: ['checkout', 'loading']
+      },
+      {
+        id: 'checkout-localization-state',
+        routePath: '/checkout',
+        name: 'Checkout Localization State',
+        priority: 'high',
+        tags: ['checkout', 'localization']
+      },
+      {
+        id: 'checkout-responsive-layout',
+        routePath: '/checkout',
+        name: 'Checkout Responsive Layout',
+        priority: 'high',
+        tags: ['checkout', 'responsive']
+      },
+      {
+        id: 'checkout-success-state',
+        routePath: '/checkout',
+        name: 'Checkout Success State',
+        priority: 'high',
+        tags: ['checkout', 'success']
       },
       {
         id: 'checkout-validation-state',

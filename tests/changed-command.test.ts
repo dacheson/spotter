@@ -11,6 +11,22 @@ import {
   runChangedCommand
 } from '../src/index.js';
 
+function expectedRunnerInvocation(configPath: string, cwd: string) {
+  if (process.platform === 'win32') {
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npx', 'playwright', 'test', '--config', configPath],
+      cwd
+    };
+  }
+
+  return {
+    command: 'npx',
+    args: ['playwright', 'test', '--config', configPath],
+    cwd
+  };
+}
+
 const tempDirectories: string[] = [];
 
 async function createTempDir(): Promise<string> {
@@ -89,6 +105,9 @@ describe('changed command', () => {
     expect(result.summary.changed).toBe(1);
     expect(result.artifactPath).toBe(path.resolve(cwd, '.generated/artifacts/changed-run.json'));
     expect(configContents).toContain('outputDir:');
+    expect(configContents).toContain('testDir: "../tests"');
+    expect(configContents).toContain('snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"');
+    expect(configContents).toContain('outputDir: "./playwright-results"');
     expect(configContents).toContain('baseURL: "http://127.0.0.1:4200"');
     expect(configContents).not.toContain('webServer: {');
     expect(JSON.parse(artifactContents)).toMatchObject({
@@ -96,11 +115,7 @@ describe('changed command', () => {
       passed: false,
       resultsDir: path.resolve(cwd, '.generated/artifacts/playwright-results')
     });
-    expect(runner).toHaveBeenCalledWith({
-      command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      args: ['playwright', 'test', '--config', result.configPath],
-      cwd
-    });
+    expect(runner).toHaveBeenCalledWith(expectedRunnerInvocation(result.configPath, cwd));
   });
 
   it('wires the changed CLI handler to report pass or fail and changed image paths', async () => {
@@ -150,6 +165,7 @@ describe('changed command', () => {
     const contents = createChangedPlaywrightConfigContents({
       appUrl: 'http://127.0.0.1:3000',
       baselineDir: 'C:/repo/.spotter/baselines',
+      configDir: 'C:/repo/.spotter/artifacts',
       devServer: {
         command: 'npm run dev',
         reuseExistingServer: true,
@@ -159,8 +175,8 @@ describe('changed command', () => {
       resultsDir: 'C:/repo/.spotter/artifacts/playwright-results'
     });
 
-    expect(contents).toContain('snapshotPathTemplate: "C:/repo/.spotter/baselines/{testFilePath}/{arg}{ext}"');
+    expect(contents).toContain('snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"');
     expect(contents).toContain('baseURL: "http://127.0.0.1:3000"');
-    expect(contents).toContain('outputDir: "C:/repo/.spotter/artifacts/playwright-results"');
+    expect(contents).toContain('outputDir: "./playwright-results"');
   });
 });

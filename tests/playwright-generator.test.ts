@@ -59,6 +59,85 @@ function createScenarioPlan(): ScenarioPlan {
   };
 }
 
+function createMultiTargetScenarioPlan(): ScenarioPlan {
+  return {
+    generatedAt: '2026-04-19T12:00:00.000Z',
+    items: [
+      {
+        scenario: {
+          id: 'checkout-empty-cart',
+          routePath: '/checkout',
+          name: 'Checkout Empty Cart',
+          priority: 'high',
+          tags: ['checkout', 'empty']
+        },
+        target: {
+          viewport: {
+            name: 'desktop',
+            width: 1440,
+            height: 900
+          },
+          locale: {
+            code: 'en-US',
+            label: 'English (US)',
+            rtl: false
+          }
+        }
+      },
+      {
+        scenario: {
+          id: 'checkout-empty-cart',
+          routePath: '/checkout',
+          name: 'Checkout Empty Cart',
+          priority: 'high',
+          tags: ['checkout', 'empty']
+        },
+        target: {
+          viewport: {
+            name: 'mobile',
+            width: 390,
+            height: 844
+          },
+          locale: {
+            code: 'en-US',
+            label: 'English (US)',
+            rtl: false
+          }
+        }
+      }
+    ]
+  };
+}
+
+function createDynamicRouteScenarioPlan(): ScenarioPlan {
+  return {
+    generatedAt: '2026-04-19T12:00:00.000Z',
+    items: [
+      {
+        scenario: {
+          id: 'blog-default',
+          routePath: '/blog/[slug]',
+          name: 'Blog Default',
+          priority: 'low',
+          tags: ['blog']
+        },
+        target: {
+          viewport: {
+            name: 'desktop',
+            width: 1440,
+            height: 900
+          },
+          locale: {
+            code: 'en-US',
+            label: 'English (US)',
+            rtl: false
+          }
+        }
+      }
+    ]
+  };
+}
+
 describe('playwright generator', () => {
   it('generates deterministic test files from a scenario plan', () => {
     const scenarioPlan = createScenarioPlan();
@@ -72,7 +151,7 @@ describe('playwright generator', () => {
 
     expect(files).toEqual([
       {
-        filePath: '.spotter/tests/checkout-checkout-empty-cart.spec.ts',
+        filePath: '.spotter/tests/checkout-checkout-empty-cart-mobile-en-us.spec.ts',
         scenario: scenarioItem.scenario,
         contents: [
           "import { expect, test } from '@playwright/test';",
@@ -113,7 +192,7 @@ describe('playwright generator', () => {
     );
 
     const written = await writeGeneratedPlaywrightTests(createScenarioPlan(), { cwd });
-    const filePath = path.join(written.outputDir, 'checkout-checkout-empty-cart.spec.ts');
+    const filePath = path.join(written.outputDir, 'checkout-checkout-empty-cart-mobile-en-us.spec.ts');
     const contents = await readFile(filePath, 'utf8');
 
     expect(written.outputDir).toBe(path.resolve(cwd, '.generated/tests'));
@@ -128,7 +207,22 @@ describe('playwright generator', () => {
     const written = await writeGeneratedPlaywrightTests(createScenarioPlan(), { cwd, outputDir });
 
     expect(written.outputDir).toBe(outputDir);
-    expect(written.files[0]?.filePath).toBe('custom-tests/checkout-checkout-empty-cart.spec.ts');
+    expect(written.files[0]?.filePath).toBe('custom-tests/checkout-checkout-empty-cart-mobile-en-us.spec.ts');
+  });
+
+  it('uses unique filenames for viewport-expanded scenarios', () => {
+    const files = generatePlaywrightTestFiles(createMultiTargetScenarioPlan());
+
+    expect(files.map((file) => file.filePath)).toEqual([
+      '.spotter/tests/checkout-checkout-empty-cart-desktop-en-us.spec.ts',
+      '.spotter/tests/checkout-checkout-empty-cart-mobile-en-us.spec.ts'
+    ]);
+  });
+
+  it('navigates dynamic routes using concrete sample params', () => {
+    const [file] = generatePlaywrightTestFiles(createDynamicRouteScenarioPlan());
+
+    expect(file?.contents).toContain("await page.goto('/blog/sample-slug');");
   });
 
   it('renders deterministic screenshot assertion options', () => {

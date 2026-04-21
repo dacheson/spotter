@@ -33,6 +33,9 @@ describe('config loader', () => {
       reuseExistingServer: true,
       timeoutMs: 120000
     });
+    expect(loaded.config.llm).toEqual({
+      fallback: null
+    });
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
       screenshotsDir: '.spotter/baselines',
@@ -61,6 +64,14 @@ describe('config loader', () => {
             command: 'pnpm dev',
             timeoutMs: 30000
           },
+          llm: {
+            fallback: {
+              enabled: true,
+              provider: 'local',
+              model: 'llama3.1',
+              baseUrl: 'http://127.0.0.1:11434/v1'
+            }
+          },
           paths: {
             screenshotsDir: 'artifacts/screenshots'
           },
@@ -79,6 +90,14 @@ describe('config loader', () => {
       command: 'pnpm dev',
       reuseExistingServer: true,
       timeoutMs: 30000
+    });
+    expect(loaded.config.llm).toEqual({
+      fallback: {
+        enabled: true,
+        provider: 'local',
+        model: 'llama3.1',
+        baseUrl: 'http://127.0.0.1:11434/v1'
+      }
     });
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
@@ -104,6 +123,7 @@ describe('config loader', () => {
         'export default {',
         "  appUrl: 'http://127.0.0.1:3100',",
         '  devServer: { command: \'npm run start\', reuseExistingServer: false, cwd: \'apps/web\', timeoutMs: 45000 },',
+        '  llm: { fallback: { enabled: true, provider: \'openai\', model: \'gpt-5.4\', apiKeyEnvVar: \'OPENAI_API_KEY\' } },',
         "  rootDir: 'apps/web',",
         '  viewports: [{ name: \'tablet\', width: 1024, height: 768 }],',
         '  paths: { testsDir: \'.generated/spotter/tests\' }',
@@ -121,6 +141,14 @@ describe('config loader', () => {
       reuseExistingServer: false,
       cwd: 'apps/web',
       timeoutMs: 45000
+    });
+    expect(loaded.config.llm).toEqual({
+      fallback: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5.4',
+        apiKeyEnvVar: 'OPENAI_API_KEY'
+      }
     });
     expect(loaded.config.rootDir).toBe('apps/web');
     expect(loaded.config.viewports).toEqual([

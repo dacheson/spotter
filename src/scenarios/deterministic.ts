@@ -27,7 +27,11 @@ const signalScenarioDefinitions: Array<{
   { kind: 'modal', suffix: 'modal-state', label: 'Modal State', tags: ['modal'] },
   { kind: 'form', suffix: 'validation-state', label: 'Validation State', tags: ['form', 'validation'] },
   { kind: 'auth', suffix: 'auth-gate', label: 'Auth Gate', tags: ['auth'] },
-  { kind: 'role', suffix: 'role-gate', label: 'Role Gate', tags: ['role'] }
+  { kind: 'role', suffix: 'role-gate', label: 'Role Gate', tags: ['role'] },
+  { kind: 'success', suffix: 'success-state', label: 'Success State', tags: ['success'] },
+  { kind: 'feature', suffix: 'feature-flag', label: 'Feature Flag', tags: ['feature-flag'] },
+  { kind: 'responsive', suffix: 'responsive-layout', label: 'Responsive Layout', tags: ['responsive'] },
+  { kind: 'locale', suffix: 'localization-state', label: 'Localization State', tags: ['localization'] }
 ];
 
 export function generateDeterministicScenarios(

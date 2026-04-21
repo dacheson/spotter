@@ -2,12 +2,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadSpotterConfig } from '../config/index.js';
-import type { RouteDefinition } from '../types.js';
-import { detectNextRoutes } from './nextjs.js';
+import { detectRoutesWithAdapters } from './adapters.js';
 
 export interface RouteManifest {
+  framework: import('../types.js').FrameworkName;
   rootDir: string;
-  routes: RouteDefinition[];
+  routes: import('../types.js').RouteDefinition[];
 }
 
 export interface CreateRouteManifestOptions {
@@ -29,9 +29,10 @@ export async function createRouteManifest(
   const cwd = options.cwd ?? process.cwd();
   const { config } = await loadSpotterConfig({ cwd });
   const rootDir = config.rootDir === '.' ? cwd : path.resolve(cwd, config.rootDir);
-  const routes = await detectNextRoutes({ cwd: rootDir });
+  const { framework, routes } = await detectRoutesWithAdapters(rootDir);
 
   return {
+    framework,
     rootDir: normalizeRelativeRootDir(cwd, rootDir),
     routes
   };

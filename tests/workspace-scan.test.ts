@@ -43,7 +43,11 @@ describe('workspace scan', () => {
     const result = await scanWorkspace({ cwd });
     const signals = JSON.parse(await readFile(result.signalsPath, 'utf8')) as { findings: Array<{ kind: string }> };
     const heuristics = JSON.parse(await readFile(result.heuristicsPath, 'utf8')) as { counts: Record<string, number> };
-    const summary = JSON.parse(await readFile(result.summaryPath, 'utf8')) as { routeCount: number; signalCount: number };
+    const summary = JSON.parse(await readFile(result.summaryPath, 'utf8')) as {
+      framework: string;
+      routeCount: number;
+      signalCount: number;
+    };
 
     expect(result.routeManifest.routes).toEqual([
       {
@@ -57,9 +61,14 @@ describe('workspace scan', () => {
     expect(heuristics.counts).toEqual({
       loading: 1,
       error: 0,
-      form: 1
+      form: 1,
+      success: 0,
+      feature: 0,
+      responsive: 0,
+      locale: 0
     });
     expect(summary.routeCount).toBe(1);
     expect(summary.signalCount).toBe(2);
+    expect(summary.framework).toBe('next-app');
   });
 });

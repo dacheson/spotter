@@ -6,6 +6,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createBaselinePlaywrightConfigContents, createDefaultCliHandlers, runBaselineCommand } from '../src/index.js';
 
+function expectedRunnerInvocation(configPath: string, cwd: string) {
+  if (process.platform === 'win32') {
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npx', 'playwright', 'test', '--config', configPath, '--update-snapshots'],
+      cwd
+    };
+  }
+
+  return {
+    command: 'npx',
+    args: ['playwright', 'test', '--config', configPath, '--update-snapshots'],
+    cwd
+  };
+}
+
 const tempDirectories: string[] = [];
 
 async function createTempDir(): Promise<string> {
@@ -23,6 +39,7 @@ describe('baseline command', () => {
     const contents = createBaselinePlaywrightConfigContents({
       appUrl: 'http://127.0.0.1:3000',
       baselineDir: 'C:/repo/.spotter/baselines',
+      configDir: 'C:/repo/.spotter/artifacts',
       devServer: {
         command: 'npm run dev',
         reuseExistingServer: true,
@@ -32,8 +49,8 @@ describe('baseline command', () => {
     });
 
     expect(contents).toContain("import { defineConfig } from '@playwright/test';");
-    expect(contents).toContain('testDir: "C:/repo/.spotter/tests"');
-    expect(contents).toContain('snapshotPathTemplate: "C:/repo/.spotter/baselines/{testFilePath}/{arg}{ext}"');
+  expect(contents).toContain('testDir: "../tests"');
+  expect(contents).toContain('snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"');
     expect(contents).toContain('baseURL: "http://127.0.0.1:3000"');
     expect(contents).toContain('webServer: {');
     expect(contents).toContain('command: "npm run dev"');
@@ -77,18 +94,16 @@ describe('baseline command', () => {
     expect(result.testDir).toBe(path.resolve(cwd, '.generated/tests'));
     expect(result.artifactPath).toBe(path.resolve(cwd, '.generated/artifacts/baseline-run.json'));
     expect(configContents).toContain('snapshotPathTemplate');
+    expect(configContents).toContain('testDir: "../tests"');
+    expect(configContents).toContain('snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"');
     expect(configContents).toContain('baseURL: "http://127.0.0.1:4100"');
     expect(configContents).toContain('command: "pnpm dev"');
-    expect(configContents).toContain(`cwd: "${path.resolve(cwd, 'apps/web').replace(/\\/g, '/')}"`);
+    expect(configContents).toContain('cwd: "../../apps/web"');
     expect(JSON.parse(artifactContents)).toMatchObject({
       kind: 'baseline',
       baselineDir: path.resolve(cwd, '.generated/baselines')
     });
-    expect(runner).toHaveBeenCalledWith({
-      command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      args: ['playwright', 'test', '--config', result.configPath, '--update-snapshots'],
-      cwd
-    });
+    expect(runner).toHaveBeenCalledWith(expectedRunnerInvocation(result.configPath, cwd));
   });
 
   it('wires the default baseline CLI handler to the baseline runner', async () => {
@@ -123,6 +138,7 @@ describe('baseline command', () => {
     const contents = createBaselinePlaywrightConfigContents({
       appUrl: 'http://127.0.0.1:3000',
       baselineDir: 'C:/repo/.spotter/baselines',
+      configDir: 'C:/repo/.spotter/artifacts',
       devServer: null,
       testDir: 'C:/repo/.spotter/tests'
     });

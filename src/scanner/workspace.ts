@@ -38,6 +38,7 @@ export async function scanWorkspace(options: ScanWorkspaceOptions = {}): Promise
     writeJsonFile(heuristicsPath, heuristics),
     writeJsonFile(summaryPath, {
       generatedAt: new Date().toISOString(),
+      framework: routeManifestResult.manifest.framework,
       rootDir: routeManifestResult.manifest.rootDir,
       routeCount: routeManifestResult.manifest.routes.length,
       filesScanned: signals.filesScanned,

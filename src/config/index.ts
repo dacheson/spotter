@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { createJiti } from 'jiti';
 
+import type { LlmProviderName } from '../llm/provider.js';
 import type { LocaleDefinition, ViewportDefinition } from '../types.js';
 
 export interface SpotterDevServerConfig {
@@ -19,18 +20,48 @@ export interface SpotterPathsConfig {
   testsDir: string;
 }
 
+export interface SpotterLlmFallbackConfig {
+  apiKeyEnvVar?: string;
+  baseUrl?: string;
+  enabled: boolean;
+  instructions?: string;
+  maxGeneratedScenarios?: number;
+  model?: string;
+  provider?: LlmProviderName;
+}
+
+export interface SpotterLlmConfig {
+  fallback: SpotterLlmFallbackConfig | null;
+}
+
 export interface SpotterConfig {
   appUrl: string;
   devServer: SpotterDevServerConfig | null;
+  llm: SpotterLlmConfig;
   rootDir: string;
   viewports: ViewportDefinition[];
   locales: LocaleDefinition[];
   paths: SpotterPathsConfig;
 }
 
+export interface SpotterLlmFallbackConfigInput {
+  apiKeyEnvVar?: string;
+  baseUrl?: string;
+  enabled?: boolean;
+  instructions?: string;
+  maxGeneratedScenarios?: number;
+  model?: string;
+  provider?: LlmProviderName;
+}
+
+export interface SpotterLlmConfigInput {
+  fallback?: SpotterLlmFallbackConfigInput | null;
+}
+
 export interface SpotterConfigInput {
   appUrl?: string;
   devServer?: Partial<SpotterDevServerConfig> | null;
+  llm?: SpotterLlmConfigInput;
   rootDir?: string;
   viewports?: ViewportDefinition[];
   locales?: LocaleDefinition[];
@@ -84,6 +115,9 @@ export const defaultSpotterConfig: SpotterConfig = {
     reuseExistingServer: true,
     timeoutMs: 120000
   },
+  llm: {
+    fallback: null
+  },
   rootDir: '.',
   viewports: defaultViewports,
   locales: defaultLocales,
@@ -104,6 +138,13 @@ function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
           ...config.devServer
         }
       : null,
+    llm: {
+      fallback: config.llm.fallback
+        ? {
+            ...config.llm.fallback
+          }
+        : null
+    },
     rootDir: config.rootDir,
     viewports: config.viewports.map((viewport) => ({ ...viewport })),
     locales: config.locales.map((locale) => ({ ...locale })),
@@ -116,6 +157,7 @@ function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
 export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterConfig {
   const defaults = cloneSpotterConfig(defaultSpotterConfig);
   let devServer: SpotterDevServerConfig | null = defaults.devServer;
+  let llmFallback: SpotterLlmFallbackConfig | null = defaults.llm.fallback;
 
   if (overrides.devServer === null) {
     devServer = null;
@@ -134,9 +176,57 @@ export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterC
     }
   }
 
+  if (overrides.llm?.fallback === null) {
+    llmFallback = null;
+  } else if (overrides.llm?.fallback) {
+    llmFallback = {
+      enabled: overrides.llm.fallback.enabled ?? defaults.llm.fallback?.enabled ?? false
+    };
+
+    const provider = overrides.llm.fallback.provider ?? defaults.llm.fallback?.provider;
+
+    if (provider !== undefined) {
+      llmFallback.provider = provider;
+    }
+
+    const model = overrides.llm.fallback.model ?? defaults.llm.fallback?.model;
+
+    if (model !== undefined) {
+      llmFallback.model = model;
+    }
+
+    const baseUrl = overrides.llm.fallback.baseUrl ?? defaults.llm.fallback?.baseUrl;
+
+    if (baseUrl !== undefined) {
+      llmFallback.baseUrl = baseUrl;
+    }
+
+    const apiKeyEnvVar = overrides.llm.fallback.apiKeyEnvVar ?? defaults.llm.fallback?.apiKeyEnvVar;
+
+    if (apiKeyEnvVar !== undefined) {
+      llmFallback.apiKeyEnvVar = apiKeyEnvVar;
+    }
+
+    const instructions = overrides.llm.fallback.instructions ?? defaults.llm.fallback?.instructions;
+
+    if (instructions !== undefined) {
+      llmFallback.instructions = instructions;
+    }
+
+    const maxGeneratedScenarios =
+      overrides.llm.fallback.maxGeneratedScenarios ?? defaults.llm.fallback?.maxGeneratedScenarios;
+
+    if (maxGeneratedScenarios !== undefined) {
+      llmFallback.maxGeneratedScenarios = maxGeneratedScenarios;
+    }
+  }
+
   return {
     appUrl: overrides.appUrl ?? defaults.appUrl,
     devServer,
+    llm: {
+      fallback: llmFallback
+    },
     rootDir: overrides.rootDir ?? defaults.rootDir,
     viewports: overrides.viewports ?? defaults.viewports,
     locales: overrides.locales ?? defaults.locales,

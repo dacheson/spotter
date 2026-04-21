@@ -97,7 +97,7 @@ export async function writeGeneratedPlaywrightTests(
 function renderPlaywrightTestFile(item: ScenarioPlanItem): string {
   const screenshotName = `${item.scenario.id}-${item.target.viewport.name}-${item.target.locale.code}.png`;
   const testName = escapeSingleQuotedString(item.scenario.id);
-  const routePath = escapeSingleQuotedString(item.scenario.routePath);
+  const routePath = escapeSingleQuotedString(createExecutableRoutePath(item.scenario.routePath));
   const screenshotAssertion = renderScreenshotAssertion(screenshotName);
 
   return [
@@ -131,7 +131,10 @@ export function renderScreenshotAssertion(
 
 function buildScenarioFileName(item: ScenarioPlanItem): string {
   const routePrefix = normalizeRouteForFilePath(item.scenario.routePath);
-  return `${routePrefix}-${slugify(item.scenario.id)}`;
+  const viewportSuffix = slugify(item.target.viewport.name);
+  const localeSuffix = slugify(item.target.locale.code);
+
+  return `${routePrefix}-${slugify(item.scenario.id)}-${viewportSuffix}-${localeSuffix}`;
 }
 
 function normalizeRouteForFilePath(routePath: string): string {
@@ -157,4 +160,15 @@ function normalizePath(value: string): string {
 
 function escapeSingleQuotedString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function createExecutableRoutePath(routePath: string): string {
+  if (routePath === '/') {
+    return routePath;
+  }
+
+  return routePath.replace(/\[\[?\.\.\.(.+?)\]\]?|\[(.+?)\]/g, (_match, catchAllName, singleName) => {
+    const dynamicName = catchAllName ?? singleName;
+    return `sample-${slugify(dynamicName)}`;
+  });
 }

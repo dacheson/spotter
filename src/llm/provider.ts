@@ -52,12 +52,34 @@ export interface CreateLlmProviderOptions {
   provider: LlmProviderName;
 }
 
+export interface ConfiguredLlmProviderOptions {
+  apiKeyEnvVar?: string;
+  baseUrl?: string;
+  model: string;
+  provider: LlmProviderName;
+}
+
 export function createLlmProvider(options: CreateLlmProviderOptions): LlmProvider {
   if (options.provider === 'mock') {
     return createMockLlmProvider(options);
   }
 
   return createInvokerLlmProvider(options);
+}
+
+export function createConfiguredLlmProvider(options: ConfiguredLlmProviderOptions): LlmProvider {
+  if (options.provider === 'mock') {
+    return createLlmProvider({
+      provider: 'mock',
+      model: options.model
+    });
+  }
+
+  return createLlmProvider({
+    provider: options.provider,
+    model: options.model,
+    invoker: createOpenAiCompatibleInvoker(options)
+  });
 }
 
 export function buildScenarioEnhancementPrompts(input: LlmEnhancementInput): {
@@ -152,4 +174,98 @@ function createDefaultProposal(provider: string, model?: string): LlmEnhancement
   }
 
   return proposal;
+}
+
+function createOpenAiCompatibleInvoker(options: ConfiguredLlmProviderOptions): LlmProviderInvoker {
+  return async (request: LlmProviderRequest): Promise<LlmProviderResponse> => {
+    const baseUrl = options.baseUrl ?? (options.provider === 'openai' ? 'https://api.openai.com/v1' : 'http://127.0.0.1:11434/v1');
+    const endpoint = `${baseUrl.replace(/\/$/, '')}/chat/completions`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    const apiKeyEnvVar = options.apiKeyEnvVar ?? (options.provider === 'openai' ? 'OPENAI_API_KEY' : undefined);
+
+    if (apiKeyEnvVar) {
+      const apiKey = process.env[apiKeyEnvVar];
+
+      if (!apiKey) {
+        throw new Error(`LLM provider ${options.provider} requires ${apiKeyEnvVar} to be set.`);
+      }
+
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: options.model,
+        messages: [
+          {
+            role: 'system',
+            content: request.systemPrompt
+          },
+          {
+            role: 'user',
+            content: request.userPrompt
+          }
+        ],
+        response_format: request.jsonOnly ? { type: 'json_object' } : undefined
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`LLM provider ${options.provider} request failed with ${response.status}.`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string | Array<{ text?: string; type?: string }> } }>;
+    };
+    const rawText = extractResponseText(payload.choices?.[0]?.message?.content);
+
+    return {
+      rawText,
+      proposal: parseJsonPayload(rawText)
+    };
+  };
+}
+
+function extractResponseText(
+  content: string | Array<{ text?: string; type?: string }> | undefined
+): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((entry) => entry.text ?? '')
+      .join('')
+      .trim();
+  }
+
+  return '';
+}
+
+function parseJsonPayload(rawText: string): unknown {
+  const trimmed = rawText.trim();
+
+  if (!trimmed) {
+    throw new Error('LLM provider returned an empty response.');
+  }
+
+  const normalized = trimmed.startsWith('```') ? trimmed.replace(/^```(?:json)?\s*|\s*```$/g, '') : trimmed;
+
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    const firstBrace = normalized.indexOf('{');
+    const lastBrace = normalized.lastIndexOf('}');
+
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(normalized.slice(firstBrace, lastBrace + 1));
+    }
+
+    throw new Error('LLM provider returned invalid JSON.');
+  }
 }

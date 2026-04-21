@@ -3,8 +3,12 @@ export type PackageManagerName = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown';
 export type FrameworkName =
   | 'next-app'
   | 'next-pages'
+  | 'remix'
+  | 'nuxt'
   | 'react-router'
   | 'vite-react'
+  | 'vite-vue'
+  | 'vue-router'
   | 'cra'
   | 'unknown';
 

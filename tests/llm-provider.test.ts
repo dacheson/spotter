@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildScenarioEnhancementPrompts,
+  createConfiguredLlmProvider,
   createLlmProvider,
   type LlmEnhancementInput,
   type LlmEnhancementProposal,
@@ -155,5 +156,38 @@ describe('llm provider abstraction', () => {
     await expect(provider.enhanceScenarios(createInput())).rejects.toThrow(
       'LLM provider local requires an invoker implementation.'
     );
+  });
+
+  it('creates an OpenAI-compatible configured provider that parses JSON responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: '{"provider":"openai","model":"gpt-5.4","scenarios":[]}'
+              }
+            }
+          ]
+        })
+      }))
+    );
+    process.env.OPENAI_API_KEY = 'test-key';
+
+    const provider = createConfiguredLlmProvider({
+      provider: 'openai',
+      model: 'gpt-5.4'
+    });
+
+    await expect(provider.enhanceScenarios(createInput())).resolves.toEqual({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      scenarios: []
+    });
+
+    vi.unstubAllGlobals();
+    delete process.env.OPENAI_API_KEY;
   });
 });

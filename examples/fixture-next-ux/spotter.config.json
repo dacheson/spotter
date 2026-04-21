@@ -1,0 +1,29 @@
+{
+  "appUrl": "http://127.0.0.1:3000",
+  "devServer": null,
+  "rootDir": ".",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "locales": [
+    {
+      "code": "en-US",
+      "label": "English (US)",
+      "rtl": false
+    }
+  ],
+  "paths": {
+    "artifactsDir": ".spotter/artifacts",
+    "screenshotsDir": ".spotter/baselines",
+    "testsDir": ".spotter/tests"
+  }
+}

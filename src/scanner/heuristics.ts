@@ -1,6 +1,13 @@
 import type { ComponentSignalFinding, ComponentSignalKind, ComponentSignalScanResult } from './signals.js';
 
-export type ComponentStateHeuristicKind = 'loading' | 'error' | 'form';
+export type ComponentStateHeuristicKind =
+  | 'loading'
+  | 'error'
+  | 'form'
+  | 'success'
+  | 'feature'
+  | 'responsive'
+  | 'locale';
 
 export interface ComponentStateHeuristic {
   kind: ComponentStateHeuristicKind;
@@ -17,7 +24,15 @@ export interface ComponentStateHeuristicSummary {
   counts: Record<ComponentStateHeuristicKind, number>;
 }
 
-const heuristicKinds = new Set<ComponentStateHeuristicKind>(['loading', 'error', 'form']);
+const heuristicKinds = new Set<ComponentStateHeuristicKind>([
+  'loading',
+  'error',
+  'form',
+  'success',
+  'feature',
+  'responsive',
+  'locale'
+]);
 
 export function deriveComponentStateHeuristics(
   scanResult: ComponentSignalScanResult
@@ -35,7 +50,11 @@ export function deriveComponentStateHeuristics(
     counts: {
       loading: heuristics.filter((heuristic) => heuristic.kind === 'loading').length,
       error: heuristics.filter((heuristic) => heuristic.kind === 'error').length,
-      form: heuristics.filter((heuristic) => heuristic.kind === 'form').length
+      form: heuristics.filter((heuristic) => heuristic.kind === 'form').length,
+      success: heuristics.filter((heuristic) => heuristic.kind === 'success').length,
+      feature: heuristics.filter((heuristic) => heuristic.kind === 'feature').length,
+      responsive: heuristics.filter((heuristic) => heuristic.kind === 'responsive').length,
+      locale: heuristics.filter((heuristic) => heuristic.kind === 'locale').length
     }
   };
 }
@@ -62,6 +81,14 @@ function getHeuristicTags(kind: ComponentSignalKind): string[] {
       return ['error'];
     case 'form':
       return ['form', 'validation'];
+    case 'success':
+      return ['success'];
+    case 'feature':
+      return ['feature-flag'];
+    case 'responsive':
+      return ['responsive'];
+    case 'locale':
+      return ['localization'];
     default:
       return [];
   }
@@ -75,6 +102,14 @@ function getHeuristicRecipes(kind: ComponentSignalKind): string[] {
       return ['mock-error-state'];
     case 'form':
       return ['submit-invalid-form'];
+    case 'success':
+      return ['assert-success-state'];
+    case 'feature':
+      return ['toggle-feature-flag'];
+    case 'responsive':
+      return ['toggle-responsive-layout'];
+    case 'locale':
+      return ['switch-locale'];
     default:
       return [];
   }

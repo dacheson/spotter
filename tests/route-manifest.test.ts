@@ -45,6 +45,7 @@ describe('route manifest', () => {
     const manifest = await createRouteManifest({ cwd });
 
     expect(manifest).toEqual({
+      framework: 'next-app',
       rootDir: 'apps/web',
       routes: [
         {
@@ -92,6 +93,7 @@ describe('route manifest', () => {
 
     expect(written.outputPath).toBe(path.resolve(cwd, '.generated/artifacts/route-manifest.json'));
     expect(JSON.parse(fileContents)).toEqual({
+      framework: 'next-app',
       rootDir: '.',
       routes: [
         {
@@ -115,6 +117,7 @@ describe('route manifest', () => {
 
     expect(written.outputPath).toBe(outputPath);
     expect(JSON.parse(fileContents)).toEqual({
+      framework: 'next-app',
       rootDir: '.',
       routes: [
         {

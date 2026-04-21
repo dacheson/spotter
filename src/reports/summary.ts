@@ -34,6 +34,8 @@ export interface WrittenVisualReportMarkdown {
   summary: VisualReportSummary;
 }
 
+const missingChangedArtifactMessage = "No changed-run artifact found. Run 'spotter changed' first.";
+
 export async function readVisualReportSummary(
   options: ReadVisualReportSummaryOptions = {}
 ): Promise<VisualReportSummary> {
@@ -42,7 +44,7 @@ export async function readVisualReportSummary(
   const artifactsDir = path.resolve(cwd, config.paths.artifactsDir);
   const changedArtifactPath = path.join(artifactsDir, 'changed-run.json');
   const scenariosArtifactPath = path.join(artifactsDir, 'scenarios.json');
-  const changedArtifact = (await readJsonFile(changedArtifactPath)) as ChangedArtifactRecord;
+  const changedArtifact = (await readRequiredChangedArtifact(changedArtifactPath)) as ChangedArtifactRecord;
   const scenariosArtifact = (await tryReadJsonFile(scenariosArtifactPath)) as
     | { generatedAt: string; scenarios: ScenarioDefinition[] }
     | null;
@@ -148,12 +150,28 @@ async function readJsonFile(filePath: string): Promise<unknown> {
   return JSON.parse(contents) as unknown;
 }
 
+async function readRequiredChangedArtifact(filePath: string): Promise<unknown> {
+  try {
+    return await readJsonFile(filePath);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      throw new Error(missingChangedArtifactMessage);
+    }
+
+    throw error;
+  }
+}
+
 async function tryReadJsonFile(filePath: string): Promise<unknown | null> {
   try {
     return await readJsonFile(filePath);
   } catch {
     return null;
   }
+}
+
+function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }
 
 function countDiffsByPriority(diffs: VisualReportDiff[]): Record<ScenarioPriority | 'unknown', number> {

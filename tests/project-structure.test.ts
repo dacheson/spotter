@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import packageMetadata from '../package.json' with { type: 'json' };
+
 import {
   defaultSpotterConfig,
   formatIsoTimestamp,
@@ -13,7 +15,7 @@ import {
 describe('project structure', () => {
   it('exports the baseline package surface', () => {
     expect(projectName).toBe('spotter');
-    expect(packageVersion).toBe('0.0.0');
+    expect(packageVersion).toBe(packageMetadata.version);
     expect(plannedCliCommands.map((command) => command.name)).toEqual([
       'init',
       'scan',
