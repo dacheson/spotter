@@ -66,6 +66,12 @@ describe('baseline command', () => {
       JSON.stringify(
         {
           appUrl: 'http://127.0.0.1:4100',
+          captureServer: {
+            command: 'pnpm start',
+            cwd: 'apps/web',
+            reuseExistingServer: false,
+            timeoutMs: 90000
+          },
           devServer: {
             command: 'pnpm dev',
             cwd: 'apps/web',
@@ -97,13 +103,47 @@ describe('baseline command', () => {
     expect(configContents).toContain('testDir: "../tests"');
     expect(configContents).toContain('snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"');
     expect(configContents).toContain('baseURL: "http://127.0.0.1:4100"');
-    expect(configContents).toContain('command: "pnpm dev"');
+    expect(configContents).toContain('command: "pnpm start"');
     expect(configContents).toContain('cwd: "../../apps/web"');
+    expect(configContents).toContain('timeout: 90000');
     expect(JSON.parse(artifactContents)).toMatchObject({
       kind: 'baseline',
       baselineDir: path.resolve(cwd, '.generated/baselines')
     });
     expect(runner).toHaveBeenCalledWith(expectedRunnerInvocation(result.configPath, cwd));
+  });
+
+  it('falls back to devServer when captureServer is not configured', async () => {
+    const cwd = await createTempDir();
+    await writeFile(
+      path.join(cwd, 'spotter.config.json'),
+      JSON.stringify(
+        {
+          appUrl: 'http://127.0.0.1:4100',
+          devServer: {
+            command: 'pnpm dev',
+            cwd: 'apps/web',
+            reuseExistingServer: false,
+            timeoutMs: 45000
+          },
+          paths: {
+            artifactsDir: '.generated/artifacts',
+            screenshotsDir: '.generated/baselines',
+            testsDir: '.generated/tests'
+          }
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    const runner = vi.fn(async () => ({ exitCode: 0 }));
+    const result = await runBaselineCommand({ cwd }, { runner });
+    const configContents = await readFile(result.configPath, 'utf8');
+
+    expect(configContents).toContain('command: "pnpm dev"');
+    expect(configContents).toContain('cwd: "../../apps/web"');
   });
 
   it('wires the default baseline CLI handler to the baseline runner', async () => {

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -6,11 +6,19 @@ import {
   type SpotterLlmFallbackConfig,
   writeStarterConfig
 } from '../config/index.js';
-import { createConfiguredLlmProvider, enhanceScenarios, type LlmProvider, type LlmProviderName } from '../llm/index.js';
+import {
+  buildScenarioEnhancementPrompts,
+  createConfiguredLlmProvider,
+  enhanceScenarios,
+  type LlmProvider,
+  type LlmProviderName
+} from '../llm/index.js';
+import { normalizeLlmEnhancementProposal, validateLlmEnhancementProposal } from '../llm/index.js';
 import { renderVisualReportSummary, writeVisualReportMarkdown } from '../reports/index.js';
 import {
   createConfiguredScenarioPlan,
   generateDeterministicScenarios,
+  prioritizeScenarios,
   mapHeuristicsToRoutes,
   mapSignalKindsToRoutes
 } from '../scenarios/index.js';
@@ -52,6 +60,33 @@ export interface ReportWorkflowResult {
   artifactPath: string;
   lines: string[];
   markdownPath: string;
+}
+
+export interface PromptWorkflowResult {
+  contextPath: string;
+  framework: FrameworkName;
+  promptPath: string;
+  routeCount: number;
+  scenarioCount: number;
+  signalCount: number;
+  warnings: string[];
+}
+
+export interface ImportWorkflowResult {
+  framework: FrameworkName;
+  importedScenarioCount: number;
+  outputDir: string;
+  planArtifactPath: string;
+  proposalArtifactPath: string;
+  scenariosArtifactPath: string;
+  scenariosCount: number;
+  testFileCount: number;
+  warnings: string[];
+}
+
+export interface ImportWorkflowOptions {
+  cwd: string;
+  inputPath: string;
 }
 
 export interface GenerateWorkflowDependencies {
@@ -163,6 +198,111 @@ export async function runGenerateWorkflow(
   };
 }
 
+export async function runPromptWorkflow(environment: WorkflowEnvironment): Promise<PromptWorkflowResult> {
+  const scenarioContext = await collectScenarioContext(environment.cwd, 'prompt');
+  const { config } = await loadSpotterConfig({ cwd: environment.cwd });
+  const artifactsDir = path.resolve(environment.cwd, config.paths.artifactsDir);
+  const promptPath = path.join(artifactsDir, 'scenario-assist.prompt.md');
+  const contextPath = path.join(artifactsDir, 'scenario-assist.context.json');
+  const instructions = config.llm.fallback?.instructions;
+  const prompts = buildScenarioEnhancementPrompts({
+    routes: scenarioContext.scanResult.routeManifest.routes,
+    signals: scenarioContext.scanResult.signals.findings,
+    existingScenarios: scenarioContext.existingScenarios,
+    ...(instructions ? { instructions } : {})
+  });
+  const context = {
+    generatedAt: new Date().toISOString(),
+    framework: scenarioContext.scanResult.routeManifest.framework,
+    routeCount: scenarioContext.scanResult.routeManifest.routes.length,
+    signalCount: scenarioContext.scanResult.signals.findings.length,
+    scenarioCount: scenarioContext.existingScenarios.length,
+    warnings: scenarioContext.warnings,
+    systemPrompt: prompts.systemPrompt,
+    userPrompt: prompts.userPrompt,
+    instructions: instructions ?? null,
+    routes: scenarioContext.scanResult.routeManifest.routes,
+    signals: scenarioContext.scanResult.signals.findings,
+    existingScenarios: scenarioContext.existingScenarios
+  };
+
+  await mkdir(artifactsDir, { recursive: true });
+  await Promise.all([
+    writeJsonFile(contextPath, context),
+    writeFile(
+      promptPath,
+      `${renderScenarioAssistPromptMarkdown({
+        routeCount: context.routeCount,
+        signalCount: context.signalCount,
+        scenarioCount: context.scenarioCount,
+        routes: context.routes.map((route) => route.path),
+        systemPrompt: context.systemPrompt,
+        userPrompt: context.userPrompt,
+        warnings: scenarioContext.warnings
+      })}\n`,
+      'utf8'
+    )
+  ]);
+
+  return {
+    contextPath,
+    framework: scenarioContext.scanResult.routeManifest.framework,
+    promptPath,
+    routeCount: scenarioContext.scanResult.routeManifest.routes.length,
+    scenarioCount: scenarioContext.existingScenarios.length,
+    signalCount: scenarioContext.scanResult.signals.findings.length,
+    warnings: scenarioContext.warnings
+  };
+}
+
+export async function runImportWorkflow(options: ImportWorkflowOptions): Promise<ImportWorkflowResult> {
+  const scenarioContext = await collectScenarioContext(options.cwd, 'import');
+  const { config } = await loadSpotterConfig({ cwd: options.cwd });
+  const artifactsDir = path.resolve(options.cwd, config.paths.artifactsDir);
+  const proposalArtifactPath = path.join(artifactsDir, 'scenario-import.json');
+  const scenariosArtifactPath = path.join(artifactsDir, 'scenarios.json');
+  const planArtifactPath = path.join(artifactsDir, 'scenario-plan.json');
+  const inputPath = path.resolve(options.cwd, options.inputPath);
+  const importedProposal = validateLlmEnhancementProposal(await readJsonFile(inputPath));
+  const mergedProposal = normalizeLlmEnhancementProposal({
+    existingScenarios: scenarioContext.existingScenarios,
+    maxGeneratedScenarios: Number.MAX_SAFE_INTEGER,
+    proposal: importedProposal
+  });
+  const routesByPath = Object.fromEntries(
+    scenarioContext.scanResult.routeManifest.routes.map((route) => [route.path, route])
+  );
+  const scenarios = prioritizeScenarios(mergedProposal.scenarios, {
+    heuristicsByRoute: scenarioContext.heuristicsByRoute,
+    routesByPath,
+    signalKindsByRoute: scenarioContext.signalKindsByRoute
+  }).sort((left, right) => left.id.localeCompare(right.id));
+  const scenarioPlan = await createConfiguredScenarioPlan(scenarios, { cwd: options.cwd });
+  const writtenTests = await writeGeneratedPlaywrightTests(scenarioPlan, { cwd: options.cwd });
+
+  await mkdir(artifactsDir, { recursive: true });
+  await Promise.all([
+    writeJsonFile(proposalArtifactPath, mergedProposal),
+    writeJsonFile(scenariosArtifactPath, {
+      generatedAt: scenarioPlan.generatedAt,
+      scenarios
+    }),
+    writeJsonFile(planArtifactPath, scenarioPlan)
+  ]);
+
+  return {
+    framework: scenarioContext.scanResult.routeManifest.framework,
+    importedScenarioCount: Math.max(0, scenarios.length - scenarioContext.existingScenarios.length),
+    outputDir: writtenTests.outputDir,
+    planArtifactPath,
+    proposalArtifactPath,
+    scenariosArtifactPath,
+    scenariosCount: scenarios.length,
+    testFileCount: writtenTests.files.length,
+    warnings: scenarioContext.warnings
+  };
+}
+
 export async function runReportWorkflow(environment: WorkflowEnvironment): Promise<ReportWorkflowResult> {
   const writtenReport = await writeVisualReportMarkdown({ cwd: environment.cwd });
 
@@ -177,10 +317,43 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
+async function readJsonFile(filePath: string): Promise<unknown> {
+  const contents = await readFile(filePath, 'utf8');
+  return JSON.parse(contents.replace(/^\uFEFF/, '')) as unknown;
+}
+
+async function collectScenarioContext(
+  cwd: string,
+  commandName: 'prompt' | 'import'
+): Promise<{
+  existingScenarios: ScenarioDefinition[];
+  heuristicsByRoute: Record<string, import('../scanner/index.js').ComponentStateHeuristic[]>;
+  scanResult: Awaited<ReturnType<typeof scanWorkspace>>;
+  signalKindsByRoute: Record<string, import('../scanner/index.js').ComponentSignalKind[]>;
+  warnings: string[];
+}> {
+  const scanResult = await scanWorkspace({ cwd });
+  const heuristicsByRoute = mapHeuristicsToRoutes(scanResult.routeManifest.routes, scanResult.heuristics.heuristics);
+  const signalKindsByRoute = mapSignalKindsToRoutes(scanResult.routeManifest.routes, scanResult.signals.findings);
+  const existingScenarios = generateDeterministicScenarios({
+    heuristicsByRoute,
+    routes: scanResult.routeManifest.routes,
+    signalKindsByRoute
+  });
+
+  return {
+    existingScenarios,
+    heuristicsByRoute,
+    scanResult,
+    signalKindsByRoute,
+    warnings: createNoRouteWarnings(scanResult.routeManifest.framework, scanResult.routeManifest.routes.length, commandName)
+  };
+}
+
 function createNoRouteWarnings(
   framework: FrameworkName,
   routeCount: number,
-  commandName: 'scan' | 'generate'
+  commandName: 'scan' | 'generate' | 'prompt' | 'import'
 ): string[] {
   if (routeCount > 0) {
     return [];
@@ -354,4 +527,98 @@ function createConfiguredProviderOptions(fallbackSettings: SpotterLlmFallbackCon
   }
 
   return configuredOptions;
+}
+
+function renderScenarioAssistPromptMarkdown(input: {
+  routeCount: number;
+  routes: string[];
+  scenarioCount: number;
+  signalCount: number;
+  systemPrompt: string;
+  userPrompt: string;
+  warnings: string[];
+}): string {
+  const lines = [
+    '# Spotter Scenario Assist Prompt',
+    '',
+    'Use this prompt with an IDE agent chat to suggest additional scenario coverage.',
+    'Return JSON only and review suggestions before adopting them into the repo.'
+  ];
+
+  if (input.routes.length > 0) {
+    lines.push(
+      '',
+      '## Suggested Ask',
+      '',
+      'Ask the agent to propose only missing states for the listed routes and avoid inventing new route paths unless the context strongly supports them.'
+    );
+  }
+
+  lines.push(
+    '',
+    '## Coverage Snapshot',
+    '',
+    `- Routes discovered: ${input.routeCount}`,
+    `- Signals discovered: ${input.signalCount}`,
+    `- Deterministic scenarios already covered: ${input.scenarioCount}`
+  );
+
+  if (input.routes.length > 0) {
+    lines.push('', '## Route Inventory', '');
+
+    for (const route of input.routes.slice(0, 12)) {
+      lines.push(`- ${route}`);
+    }
+
+    if (input.routes.length > 12) {
+      lines.push(`- ...and ${input.routes.length - 12} more routes in the JSON context artifact.`);
+    }
+  }
+
+  if (input.warnings.length > 0) {
+    lines.push('', '## Notes', '');
+
+    for (const warning of input.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  lines.push(
+    '',
+    '## Copy This System Prompt',
+    '',
+    '```text',
+    input.systemPrompt,
+    '```',
+    '',
+    '## Copy This User Prompt',
+    '',
+    '```text',
+    input.userPrompt,
+    '```',
+    '',
+    '## Expected Response Shape',
+    '',
+    '```json',
+    JSON.stringify(
+      {
+        provider: 'ide-manual',
+        model: 'your-ide-agent',
+        scenarios: [
+          {
+            id: 'scenario-id',
+            routePath: '/route',
+            name: 'Human Readable Name',
+            priority: 'high',
+            tags: ['tag']
+          }
+        ]
+      },
+      null,
+      2
+    ),
+    '```'
+  );
+
+  return lines.join('\n');
 }

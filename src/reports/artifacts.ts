@@ -25,6 +25,9 @@ export interface ChangedArtifactRecord {
   testDir: string;
   command: string;
   args: string[];
+  completed: boolean;
+  exitCode: number;
+  failureMessage?: string;
   passed: boolean;
   summary: DiffSummary;
 }

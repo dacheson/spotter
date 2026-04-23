@@ -36,6 +36,7 @@ export interface SpotterLlmConfig {
 
 export interface SpotterConfig {
   appUrl: string;
+  captureServer?: SpotterDevServerConfig | null;
   devServer: SpotterDevServerConfig | null;
   llm: SpotterLlmConfig;
   rootDir: string;
@@ -60,6 +61,7 @@ export interface SpotterLlmConfigInput {
 
 export interface SpotterConfigInput {
   appUrl?: string;
+  captureServer?: Partial<SpotterDevServerConfig> | null;
   devServer?: Partial<SpotterDevServerConfig> | null;
   llm?: SpotterLlmConfigInput;
   rootDir?: string;
@@ -133,6 +135,14 @@ export const supportedConfigFileNames = ['spotter.config.ts', 'spotter.config.js
 function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
   return {
     appUrl: config.appUrl,
+    captureServer:
+      config.captureServer === undefined
+        ? undefined
+        : config.captureServer
+          ? {
+              ...config.captureServer
+            }
+          : null,
     devServer: config.devServer
       ? {
           ...config.devServer
@@ -156,8 +166,28 @@ function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
 
 export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterConfig {
   const defaults = cloneSpotterConfig(defaultSpotterConfig);
+  let captureServer: SpotterDevServerConfig | null | undefined = defaults.captureServer;
   let devServer: SpotterDevServerConfig | null = defaults.devServer;
   let llmFallback: SpotterLlmFallbackConfig | null = defaults.llm.fallback;
+
+  if (Object.hasOwn(overrides, 'captureServer')) {
+    if (overrides.captureServer === null) {
+      captureServer = null;
+    } else if (overrides.captureServer) {
+      captureServer = {
+        command: overrides.captureServer.command ?? defaults.devServer?.command ?? 'npm run dev',
+        reuseExistingServer:
+          overrides.captureServer.reuseExistingServer ?? defaults.devServer?.reuseExistingServer ?? true,
+        timeoutMs: overrides.captureServer.timeoutMs ?? defaults.devServer?.timeoutMs ?? 120000
+      };
+
+      const captureServerCwd = overrides.captureServer.cwd;
+
+      if (captureServerCwd) {
+        captureServer.cwd = captureServerCwd;
+      }
+    }
+  }
 
   if (overrides.devServer === null) {
     devServer = null;
@@ -223,6 +253,7 @@ export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterC
 
   return {
     appUrl: overrides.appUrl ?? defaults.appUrl,
+    ...(captureServer !== undefined ? { captureServer } : {}),
     devServer,
     llm: {
       fallback: llmFallback
@@ -319,4 +350,12 @@ export async function writeStarterConfig(
     config,
     configPath
   };
+}
+
+export function resolveCaptureServerConfig(config: SpotterConfig): SpotterDevServerConfig | null {
+  if (Object.hasOwn(config, 'captureServer')) {
+    return config.captureServer ?? null;
+  }
+
+  return config.devServer;
 }

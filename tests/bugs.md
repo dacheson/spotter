@@ -1,1139 +1,452 @@
-# Spotter UX Fixture Findings
+# Spotter 0.1.3 Retest
 
-## Summary
+## Scope
 
-This file records an end-to-end Spotter run against a purpose-built Next.js UX fixture app in `fixture-next-ux`.
+This is a retest of the newly published `@dcacheson/spotter@0.1.3` package.
 
-The fixture includes:
-
-- Next.js app router routes
-- a dynamic route
-- a route group
-- a parallel route
-- loading, error, form, auth, role, empty, modal, validation, localization, and feature-flag style code branches
-
-Result:
-
-- the fixture app itself builds successfully
-- Spotter `init`, `scan`, and `generate` complete
-- Spotter `baseline`, `changed`, and `report` expose multiple product bugs on Windows
-- a direct Playwright workaround proves the generated specs can run when Spotter's broken runner/config path is bypassed
+It builds on the earlier findings in `SPOTTER_TEST_PLAN_AND_BUGS.md` and `SPOTTER_UX_FIXTURE_FINDINGS.md`.
 
 ## Environment
 
 - OS: Windows
 - Node: `v22.19.0`
 - npm: `10.9.3`
-- Spotter package: `@dcacheson/spotter@0.1.0`
+- Spotter: `0.1.3`
 - Playwright: `1.59.1`
 
-## Fixture Setup
+## Test Surfaces
 
-Created a small Next app at `fixture-next-ux` with these notable routes:
+### 1. Published package smoke checks
 
-- `/`
-- `/checkout`
-- `/products`
-- `/admin`
-- `/settings`
-- `/pricing` from a route group
-- `/blog/[slug]` dynamic route
-- `app/@modal/intercepted/page.jsx` parallel route for discovery testing
+- `npx -y @dcacheson/spotter@latest --help`
+- `npx -y @dcacheson/spotter@latest --version`
 
-The app deliberately includes:
+### 2. Main UX fixture
 
-- explicit loading branches
-- explicit error branches
-- explicit form validation states
-- explicit auth and role gates
-- an explicit empty state on products
-- a modal branch
-- localized copy
-- feature-flag-like conditional content
+- directory: `fixture-next-ux`
+- purpose: realistic Next.js app with loading, error, empty, success, modal, auth, role, feature-flag, responsive, locale, route-group, and dynamic-route patterns
 
-## Commands Run
+### 3. No-route fixture
+
+- directory: `fixture-no-routes`
+- purpose: verify behavior when Spotter can scan UX signals but cannot deterministically discover routes
+
+## What Was Fixed In 0.1.3
+
+### 1. Published `npx` help now works
+
+Repro:
 
 ```powershell
-npm install
-npm run build
-npm install -D @dcacheson/spotter @playwright/test
-npx playwright install chromium
-node .\node_modules\@dcacheson\spotter\dist\cli.js --version
-node .\node_modules\@dcacheson\spotter\dist\cli.js init
-node .\node_modules\@dcacheson\spotter\dist\cli.js scan
-node .\node_modules\@dcacheson\spotter\dist\cli.js generate
-node .\node_modules\@dcacheson\spotter\dist\cli.js baseline
-node .\node_modules\@dcacheson\spotter\dist\cli.js changed
-node .\node_modules\@dcacheson\spotter\dist\cli.js report
+npx -y @dcacheson/spotter@latest --help
 ```
 
-Workaround verification command:
+Result:
+
+- help text printed correctly
+- no install-prompt failure
+- the previous packaging regression appears fixed
+
+### 2. Version output now matches the published version
+
+Repro:
 
 ```powershell
-npx playwright test --config .\playwright.relative.config.mjs --update-snapshots
+npx -y @dcacheson/spotter@latest --version
 ```
 
-That workaround run passed all generated specs.
+Result:
 
-## What Worked
+- output is `0.1.3`
+- the old `0.0.0` version bug appears fixed
 
-### Route discovery
+### 3. Docs now use the scoped package correctly
 
-Spotter correctly discovered these 7 routes:
+Observed from npm README:
 
-- `/`
-- `/admin`
-- `/blog/[slug]`
-- `/checkout`
-- `/pricing`
-- `/products`
-- `/settings`
+- install examples now use `@dcacheson/spotter`
+- direct `npx` usage now shows `npx @dcacheson/spotter@latest init`
 
-It correctly did not include the parallel route as a user-facing route.
+The major README inconsistency from the earlier version appears fixed.
 
-### Baseline workaround validation
+### 4. Scanner coverage improved materially on the UX fixture
 
-Using a temporary relative-path Playwright config, all 14 generated specs ran and passed.
+On the same fixture app, Spotter improved from:
 
-This matters because it shows:
+- `11` signals to `17` signals
+- `14` scenarios to `20` scenarios
 
-- the fixture app is valid
-- the generated specs are at least broadly executable
-- several failures below are Spotter product bugs, not app bugs
+Newly detected signal/scenario coverage now includes:
 
-## Confirmed Bugs
+- `empty`
+- `success`
+- `responsive`
+- `locale`
+- `feature`
 
-### 1. `baseline` fails on Windows with `spawn EINVAL`
+This is a real improvement over the prior version.
 
-- Severity: high
-- Area: CLI runner / Windows support
-
-#### Repro
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js baseline
-```
+### 5. Generated file collisions across viewport targets are fixed
 
 Observed:
 
-- command throws `Error: spawn EINVAL`
-- failure occurs before Playwright can run
+- `generate` reported `40` test files from `20` scenarios
+- the `.spotter/tests` directory actually contains `40` distinct files
+- desktop and mobile variants are written separately
 
-Root cause evidence:
+The earlier overwrite bug appears fixed.
 
-- Spotter uses a Node spawn call with `npx.cmd` on Windows
-- a direct shell call works:
+### 6. Dynamic-route generation improved
 
-```powershell
-npx playwright --version
+Generated test sample now uses:
+
+```ts
+await page.goto('/blog/sample-slug');
 ```
 
-- but a Node-level spawn of `npx.cmd` fails in this environment with the same `EINVAL`
-
-Impact:
-
-- `baseline` is unusable on this Windows setup
-
-Likely fix direction:
-
-- use `shell: true` for Windows command invocation
-- or invoke `cmd.exe /c npx ...`
-- or avoid `npx.cmd` spawning directly on Windows
-
-### 2. `changed` fails on Windows with the same `spawn EINVAL`
-
-- Severity: high
-- Area: CLI runner / Windows support
-
-#### Repro
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js changed
-```
-
-Observed:
-
-- same `spawn EINVAL` failure pattern as `baseline`
-
-Impact:
-
-- diff-based workflow is blocked on Windows
-
-Likely fix direction:
-
-- same runner fix as `baseline`
-
-### 3. Generated absolute-path Playwright config fails on Windows with `Requiring @playwright/test second time`
-
-- Severity: high
-- Area: Playwright config generation / Windows path handling
-
-#### Repro
-
-```powershell
-npx playwright test --config .\.spotter\artifacts\playwright.baseline.config.mjs --update-snapshots
-```
-
-Observed:
-
-- Playwright throws repeated `Requiring @playwright/test second time` errors
-- generated tests do not run under Spotter's emitted config
-
-Important discriminator:
-
-- a temporary config using relative paths works:
-
-```powershell
-npx playwright test --config .\playwright.relative.config.mjs --update-snapshots
-```
-
-- all 14 tests passed under the relative-path config
-
-Interpretation:
-
-- the failure is not a general incompatibility between Spotter specs and Playwright
-- it is likely caused by the generated absolute paths on Windows, possibly with path casing or loader identity issues
-
-Impact:
-
-- even if the spawn bug is fixed, the emitted Playwright config is still broken on this Windows setup
-
-Likely fix direction:
-
-- prefer relative `testDir` and snapshot paths in generated config
-- audit Windows path normalization and path casing
-
-### 4. `generate` reports 28 test files, but only 14 unique files are written
-
-- Severity: high
-- Area: test generation / viewport-locale expansion
-
-#### Repro
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js generate
-```
-
-Observed:
-
-- CLI output says:
-
-```txt
-Generated 28 Playwright test files from 14 scenarios.
-```
-
-- actual `.spotter/tests` directory contains 14 spec files
-- generated files contain only one viewport per scenario, usually mobile
-
-Evidence:
-
-- scenario plan contains both `desktop` and `mobile` targets
-- file naming appears to depend only on route plus scenario id, not viewport or locale target
-- later writes overwrite earlier writes for the same scenario
-
-Impact:
-
-- advertised coverage expansion across viewports/locales is not actually preserved as separate test files
-- one target silently replaces another
-- effective visual coverage is reduced without warning
-
-Likely fix direction:
-
-- include viewport and locale identity in the generated spec file name
-- or group multiple tests into one file per scenario instead of overwriting
-- adjust CLI counts to reflect files actually written
-
-### 5. Empty-state detection missed an explicit empty state
-
-- Severity: medium-high
-- Area: AST signal scanning
-
-#### Fixture case
-
-`/products` contains an explicit empty-state branch based on `products.length === 0` and renders `No products found`.
-
-Observed:
-
-- scan found 11 signals
-- no `empty` signal or empty-state scenario was generated for `/products`
-- only `products-default` was generated
-
-Expected:
-
-- README claims scanner can extract signals such as loading, error, empty, modal, form, auth, and role checks
-- `/products` should produce an `empty` signal and likely a `Products Empty State` scenario
-
-Impact:
-
-- a documented UX state class is missed on a simple and common pattern
-
-Likely fix direction:
-
-- add detection for array-length zero and similar empty-data branches
-- include copy-based signals like `No products found` only as a fallback, not the primary mechanism
-
-### 6. Dynamic-route tests use the literal template path `/blog/[slug]`
-
-- Severity: medium
-- Area: scenario generation / route execution realism
-
-#### Observed
-
-Generated test example:
+instead of the old literal route template:
 
 ```ts
 await page.goto('/blog/[slug]');
 ```
 
-Expected:
+This is a meaningful improvement for dynamic-route realism.
 
-- generated dynamic-route scenarios should use a concrete sample path or fixture params
-- examples: `/blog/sample-post` or user-configurable route params
+### 7. Generated baseline config now uses relative paths
 
-Notes:
+Observed generated config:
 
-- this did not fail in the fixture app because Next treats `[slug]` as a literal slug value
-- it is still low-quality execution because it does not represent realistic route data
+- `testDir: "../tests"`
+- `snapshotPathTemplate: "../baselines/{testFilePath}/{arg}{ext}"`
+
+This appears to fix the earlier Windows issue where the absolute-path config triggered Playwright's duplicate `@playwright/test` import error.
+
+### 8. No-route messaging now matches the README claims
+
+In the `fixture-no-routes` project:
+
+```powershell
+npx spotter scan
+npx spotter generate
+```
+
+Result:
+
+- `scan` reported `0 routes and 3 signals`
+- Spotter printed a clear warning that no deterministic routes were found
+- `generate` reported `0 Playwright test files from 0 scenarios`
+- it also printed the same supported-adapters explanation
+
+This is good behavior and a meaningful product improvement.
+
+## Remaining Bugs In 0.1.3
+
+### 1. Baseline is still unstable when using the default `npm run dev` server path
+
+- Severity: medium-high
+- Area: baseline reliability / default workflow
+
+Observed on `fixture-next-ux` with the default Spotter config:
+
+```powershell
+npx spotter baseline
+```
+
+Result:
+
+- Playwright started and ran, so the Windows spawn problem is fixed
+- but two tests failed during baseline creation with:
+  - `Failed to take two consecutive stable screenshots`
+
+Interpretation:
+
+- the failure appears tied to using the Next.js dev server path for screenshot capture
+- when the fixture was switched to `npm run start` and built first, baseline succeeded cleanly
 
 Impact:
 
-- generated coverage for dynamic routes may be misleading or unusable in real apps
+- the default starter config may still produce flaky or failing baselines on common Next.js setups
 
 Likely fix direction:
 
-- require or infer sample params for dynamic segments
-- emit a clear placeholder mechanism if no fixture data exists
+- prefer a more stable production-oriented workflow for baseline capture
+- or detect and suppress dev-only UI noise
+- or document that `npm run dev` may not be stable enough for reliable screenshot baselines
 
-### 7. `report` fails with a raw `ENOENT` stack trace when no changed artifact exists
-
-- Severity: medium
-- Area: UX / error handling
-
-#### Repro
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js report
-```
-
-Observed:
-
-- command throws a raw Node stack trace for missing `.spotter/artifacts/changed-run.json`
-
-Expected:
-
-- a user-facing error like:
-  - `No changed-run artifact found. Run 'spotter changed' first.`
-
-Impact:
-
-- workflow prerequisites are not communicated clearly
-
-Likely fix direction:
-
-- catch missing artifact errors and emit actionable CLI guidance
-
-### 8. CLI version still reports `0.0.0`
-
-- Severity: medium
-- Area: CLI metadata
-
-#### Repro
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js --version
-```
-
-Observed:
-
-- output is `0.0.0`
-
-Expected:
-
-- output should match the published version `0.1.0`
-
-## Coverage Gaps Observed In This Fixture
-
-These are not all necessarily bugs yet, but they are worth retesting after fixes:
-
-- empty-state detection for array-driven UIs
-- success-state detection from `submitted` or similar form completion branches
-- mobile-nav and responsive-state discovery from boolean layout flags
-- localization and RTL specific scenario generation beyond configured locale expansion
-- feature-flag branch discovery
-
-## Recommended Fix Order
-
-1. Fix Windows process spawning for `baseline` and `changed`
-2. Fix generated Playwright config to avoid absolute-path loader issues on Windows
-3. Fix generated file collisions across viewport/locale targets
-4. Improve empty-state detection
-5. Improve dynamic-route execution strategy
-6. Improve prerequisite error messages for `report`
-
-## Useful Artifacts
-
-- Fixture app: `fixture-next-ux`
-- Spotter config: `fixture-next-ux/spotter.config.json`
-- Generated route manifest: `fixture-next-ux/.spotter/artifacts/route-manifest.json`
-- Generated signals: `fixture-next-ux/.spotter/artifacts/component-signals.json`
-- Generated scenarios: `fixture-next-ux/.spotter/artifacts/scenarios.json`
-- Generated scenario plan: `fixture-next-ux/.spotter/artifacts/scenario-plan.json`
-- Generated tests: `fixture-next-ux/.spotter/tests`
-- Temporary workaround config: `fixture-next-ux/playwright.relative.config.mjs`
-
-
-# Spotter Test Plan And Bug Backlog
-
-## Scope
-
-This document is for testing the published npm package `@dcacheson/spotter` and recording bugs to fix later.
-
-Sources used:
-
-- Published npm package metadata and tarball for `@dcacheson/spotter@0.1.0`
-- Published README on npm and GitHub
-- Smoke tests run locally on Windows with Node `v22.19.0` and npm `10.9.3`
-
-## Confirmed Bugs
-
-### 1. `npx @dcacheson/spotter@latest --help` exits without showing help
+### 2. `changed` generates invalid Playwright config syntax
 
 - Severity: high
-- Area: packaging / CLI execution
-- Status: confirmed on Windows
+- Area: changed-run config generation
 
-#### Repro
+Repro:
 
 ```powershell
-npx @dcacheson/spotter@latest --help
+npx spotter changed
 ```
 
 Observed:
 
-- `npx` prompts to install `@dcacheson/spotter@0.1.0`
-- after confirming, the command exits non-zero
-- no help text is printed
+- Spotter writes `.spotter/artifacts/playwright.changed.config.mjs`
+- that file is syntactically invalid because `outputDir` is inserted without a separating comma
+
+Broken output example:
+
+```js
+  }
+  outputDir: "./playwright-results"
+});
+```
 
 Expected:
 
-- the standard CLI help output should print successfully
-- exit code should be `0`
-
-#### Evidence
-
-- The published tarball contains `dist/cli.js` as the `bin` target.
-- The published `dist/cli.js` does not include a shebang such as `#!/usr/bin/env node`.
-- Running the installed file directly with Node works:
-
-```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js --help
+```js
+  },
+  outputDir: "./playwright-results"
+});
 ```
 
-This strongly suggests the package contents are mostly valid, but the published executable entrypoint is not packaged in a form that `npx` can execute reliably.
+Impact:
 
-#### Likely Fix Direction
+- `changed` cannot execute successfully even after `baseline` succeeds
 
-- ensure the published CLI entrypoint includes a shebang
-- verify `npx @dcacheson/spotter@latest --help` on Windows and macOS/Linux before publishing
+### 3. `changed` masks Playwright parse failure as a 0-diff changed run
 
-### 2. CLI reports version `0.0.0` instead of the published package version
+- Severity: high
+- Area: changed-run result handling
+
+Observed:
+
+- Playwright throws a syntax parse error for the invalid changed config
+- Spotter still prints:
+
+```txt
+Changed run failed with 0 changed screenshots.
+Changed artifact written to ...changed-run.json
+```
+
+- the written artifact reports:
+  - `passed: false`
+  - `changed: 0`
+  - `artifacts: []`
+
+Why this is a bug:
+
+- the run did not actually complete a valid diff check
+- `0 changed screenshots` is misleading because the runner never reached a valid comparison phase
+
+Impact:
+
+- downstream tooling and humans may misread a config parse failure as a legitimate no-diff run
+
+### 4. `report` trusts the misleading failed changed-run artifact too readily
 
 - Severity: medium
-- Area: CLI metadata
-- Status: confirmed
+- Area: reporting / failure semantics
 
-#### Repro
+Repro after the broken `changed` run:
 
 ```powershell
-node .\node_modules\@dcacheson\spotter\dist\cli.js --version
+npx spotter report
 ```
 
 Observed:
 
-- output is `0.0.0`
+- report succeeds
+- it renders a summary showing:
+  - changed scenarios: `0`
+  - high/medium/low diffs: `0`
 
-Expected:
+This is technically consistent with the artifact, but still misleading because the changed-run artifact itself came from a parse failure, not a valid comparison.
 
-- output should be `0.1.0` for the currently published package
+Impact:
 
-#### Evidence
+- the package currently has no distinction between:
+  - legitimate zero-diff results
+  - execution failure before diff collection
 
-- npm metadata reports package version `0.1.0`
-- the source also appears to hard-code `0.0.0` in the exported package version and CLI program version
-
-#### Likely Fix Direction
-
-- source the CLI version from `package.json` at build time or inject it during bundling
-- add a release test that compares `--version` output with the published package version
-
-### 3. README install and `npx` usage are inconsistent across published docs
+### 5. Baseline success currently required a production-server workaround in the fixture
 
 - Severity: medium
-- Area: documentation
-- Status: confirmed
+- Area: workflow ergonomics
 
-#### Observed
+To get a reliable baseline on the UX fixture, the config had to be changed from:
 
-The docs are inconsistent about the package name:
-
-- some docs correctly refer to `@dcacheson/spotter`
-- GitHub README excerpts still show unscoped commands like:
-
-```bash
-npm install -D spotter @playwright/test
-npx spotter@latest init
+```json
+"command": "npm run dev"
 ```
 
-Expected:
+to:
 
-- all install and run instructions should consistently use the actual published package name or the actual installed bin flow
-
-#### Why This Matters
-
-- users may try to install the wrong package
-- users may assume `npx spotter@latest` works when the published package is scoped
-- this will create false bug reports and onboarding friction
-
-#### Likely Fix Direction
-
-- normalize README examples to the scoped package name or to the local installed binary flow
-- verify every command in docs against a clean machine before publishing
-
-## Recommended Test Matrix
-
-## A. Install And Packaging
-
-### A1. Fresh `npx` help on Windows
-
-- command: `npx @dcacheson/spotter@latest --help`
-- verify install prompt appears once
-- verify help text prints
-- verify exit code is `0`
-
-### A2. Fresh `npx` help on macOS/Linux
-
-- command: `npx @dcacheson/spotter@latest --help`
-- verify help text prints
-- verify exit code is `0`
-
-### A3. Local dependency install
-
-- command: `npm install -D @dcacheson/spotter @playwright/test`
-- verify package installs cleanly
-- verify no missing runtime dependency errors when running commands
-
-### A4. Local bin after install
-
-- command: `npx spotter --help`
-- verify command resolves to the installed local package
-- verify exit code is `0`
-
-### A5. Version output
-
-- command: `npx spotter --version`
-- verify it matches the package version in `package.json` and npm
-
-### A6. Tarball integrity
-
-- command: `npm pack @dcacheson/spotter@latest`
-- verify tarball contains:
-  - `dist/cli.js`
-  - `dist/index.js`
-  - type declarations
-  - README
-  - package metadata
-- verify `dist/cli.js` is executable as a node CLI
-
-## B. CLI Surface
-
-### B1. Top-level help
-
-- command: `npx spotter --help`
-- confirm commands listed:
-  - `init`
-  - `scan`
-  - `generate`
-  - `baseline`
-  - `changed`
-  - `report`
-
-### B2. Command help pages
-
-- run `npx spotter <command> --help` for each command
-- verify each command has meaningful description text
-- verify no command throws or exits unexpectedly
-
-### B3. Invalid command
-
-- command: `npx spotter nope`
-- verify clear error message
-- verify help hint is shown
-- verify non-zero exit code
-
-### B4. Running in an empty folder
-
-- run `init`, `scan`, `generate`, `baseline`, `changed`, `report` one by one in an empty directory
-- verify errors are clear and actionable where commands require prior artifacts
-
-## C. Config Handling
-
-### C1. `init` creates default config
-
-- command: `npx spotter init`
-- verify `spotter.config.json` is created
-- verify contents include:
-  - `appUrl`
-  - `devServer`
-  - `rootDir`
-  - `locales`
-  - `viewports`
-  - `paths`
-
-### C2. `init` in a directory with existing config
-
-- run `npx spotter init` twice
-- verify second run fails with a clear message and does not overwrite config
-
-### C3. JSON config override
-
-- create `spotter.config.json` with custom `appUrl`, `paths`, `viewports`, and `locales`
-- verify subsequent commands use those values
-
-### C4. TypeScript config loading
-
-- create `spotter.config.ts`
-- verify it loads correctly
-- verify JSON and TS precedence is documented and deterministic
-
-### C5. `devServer: null`
-
-- set `devServer` to `null`
-- verify baseline and changed commands do not try to start a server
-
-### C6. Custom `devServer.cwd`
-
-- point `devServer.cwd` at a nested app directory
-- verify generated Playwright config resolves the path correctly
-
-### C7. Broken config JSON
-
-- introduce invalid JSON
-- verify error is explicit and points to the config file
-
-### C8. Broken TS config
-
-- throw inside `spotter.config.ts`
-- verify error is explicit and includes the stack or cause
-
-## D. Route Discovery
-
-Use small sample repos for each case.
-
-### D1. Next.js app router root route
-
-- fixture: `app/page.tsx`
-- expected route: `/`
-
-### D2. Nested app router routes
-
-- fixture: `app/dashboard/page.tsx`
-- expected route: `/dashboard`
-
-### D3. Dynamic app routes
-
-- fixture: `app/blog/[slug]/page.tsx`
-- expected dynamic route metadata for `[slug]`
-
-### D4. Catch-all routes
-
-- fixture: `app/docs/[...parts]/page.tsx`
-- verify catch-all segment metadata
-
-### D5. Optional catch-all routes
-
-- fixture: `app/docs/[[...parts]]/page.tsx`
-- verify optional catch-all segment metadata
-
-### D6. Route groups ignored in URL
-
-- fixture: `app/(marketing)/pricing/page.tsx`
-- expected route: `/pricing`
-
-### D7. Parallel routes ignored in URL
-
-- fixture: `app/@modal/intercepted/page.tsx`
-- verify they do not become top-level URLs
-
-### D8. Pages router root route
-
-- fixture: `pages/index.tsx`
-- expected route: `/`
-
-### D9. Nested pages routes
-
-- fixture: `pages/docs/getting-started.tsx`
-- expected route: `/docs/getting-started`
-
-### D10. Pages dynamic routes
-
-- fixture: `pages/blog/[slug].tsx`
-- expected dynamic route metadata
-
-### D11. API and underscore files ignored
-
-- fixtures:
-  - `pages/api/health.ts`
-  - `pages/_app.tsx`
-  - `pages/_document.tsx`
-- verify no user-facing routes are produced
-
-### D12. Mixed `app` and `pages` repos
-
-- include both directory styles
-- verify deduping is deterministic if equivalent routes exist
-
-### D13. Monorepo rootDir support
-
-- set `rootDir` to `apps/web`
-- verify discovered file paths are normalized correctly relative to that root
-
-### D14. Non-Next repo
-
-- run against a Vite or plain React repo
-- verify behavior is clear:
-  - either no routes with good messaging
-  - or a supported-framework warning
-
-## E. Component Signal Scanning
-
-### E1. Loading state detection
-
-- component contains `loading` flag and loading branch
-- verify loading signal is emitted
-
-### E2. Error state detection
-
-- component contains `error` branch
-- verify error signal is emitted
-
-### E3. Empty state detection
-
-- component contains empty-list or empty-data branch
-- verify empty signal is emitted
-
-### E4. Modal detection
-
-- component uses `isOpen` or modal render branch
-- verify modal signal is emitted
-
-### E5. Form detection
-
-- component contains a form and validation branch
-- verify form signal is emitted
-
-### E6. Auth gate detection
-
-- component checks `user`, `session`, or auth role
-- verify auth or role signal is emitted
-
-### E7. JS and JSX files
-
-- test `.js` and `.jsx` source files
-- verify they are scanned, not just TS and TSX
-
-### E8. False positives
-
-- use variable names like `loadingColor` or `errorCount`
-- verify signal detection does not over-trigger on unrelated identifiers
-
-### E9. Large file performance
-
-- run scan against a large component tree
-- verify execution time stays reasonable
-- verify output remains deterministic across repeated runs
-
-## F. Heuristics And Scenario Generation
-
-### F1. Base route scenario generation
-
-- one route with no signals
-- verify at least the default route scenario is generated
-
-### F2. Loading heuristic
-
-- route with loading signal
-- verify loading scenario exists with expected tags or recipe hints
-
-### F3. Error heuristic
-
-- route with error signal
-- verify error scenario exists
-
-### F4. Form heuristic
-
-- route with form signal
-- verify validation scenario exists
-
-### F5. Auth and role priority effects
-
-- route protected by auth or role checks
-- verify priority changes deterministically
-
-### F6. Scenario deduplication
-
-- create overlapping signals and heuristics
-- verify duplicate scenarios are not produced
-
-### F7. Stable ordering
-
-- run `generate` twice without code changes
-- verify scenario JSON and generated test ordering are identical
-
-### F8. Locale expansion
-
-- configure multiple locales including RTL
-- verify scenario plan multiplies per locale
-
-### F9. Viewport expansion
-
-- configure desktop, mobile, tablet
-- verify scenario plan multiplies per viewport
-
-### F10. Locale x viewport cross-product
-
-- verify total plan count equals scenarios x locales x viewports
-
-## G. Playwright Test Generation
-
-### G1. Tests directory output
-
-- run `npx spotter generate`
-- verify generated specs land in configured `testsDir`
-
-### G2. Generated file naming
-
-- verify filenames are deterministic and readable
-- verify names are stable across repeated runs
-
-### G3. Screenshot assertion settings
-
-- inspect generated tests
-- verify screenshot assertions use:
-  - disabled animations
-  - hidden carets
-  - CSS scale
-  - full-page capture
-
-### G4. Base URL usage
-
-- verify generated baseline/changed Playwright config uses `appUrl` as `use.baseURL`
-
-### G5. No overwrite surprises
-
-- add a manual file under generated test output
-- verify generation behavior is clear and documented
-
-## H. Baseline Command
-
-### H1. Baseline run on working sample app
-
-- after `generate`, run `npx spotter baseline`
-- verify screenshots are written to configured `screenshotsDir`
-- verify artifact JSON is written
-
-### H2. Auto web server startup
-
-- with valid `devServer.command`
-- verify baseline starts server when needed
-
-### H3. Reuse existing server
-
-- with `reuseExistingServer: true`
-- start app manually, then run baseline
-- verify command reuses running server
-
-### H4. Invalid server command
-
-- break `devServer.command`
-- verify failure is explicit and actionable
-
-### H5. Missing Playwright dependency
-
-- install spotter without `@playwright/test`
-- verify error clearly tells user what is missing
-
-### H6. Missing browser install
-
-- do not run `npx playwright install`
-- verify failure clearly tells user how to fix it
-
-## I. Changed Command And Diff Collection
-
-### I1. No visual changes
-
-- run `changed` immediately after successful baseline
-- verify changed count is `0`
-- verify exit behavior is intentional and documented
-
-### I2. Real UI change
-
-- change CSS or layout visibly
-- run `changed`
-- verify changed artifacts include diff, current, and baseline paths
-
-### I3. Multiple changed screenshots
-
-- trigger multiple scenario diffs
-- verify summary counts are correct
-
-### I4. Missing baseline directory
-
-- run `changed` before `baseline`
-- verify error is explicit
-
-### I5. Corrupted Playwright results
-
-- simulate malformed results output
-- verify Spotter handles it gracefully or reports a clear parse failure
-
-### I6. Changed run artifact structure
-
-- inspect `.spotter/artifacts/changed-run.json`
-- verify it contains command, args, config path, results path, pass/fail, and summary
-
-## J. Report Command
-
-### J1. Report after successful changed run
-
-- run `npx spotter report`
-- verify markdown report is generated
-
-### J2. Report with changed screenshots
-
-- verify report includes:
-  - priority
-  - scenario name
-  - diff path
-  - baseline path
-  - current path
-
-### J3. Report with zero diffs
-
-- verify markdown still renders usefully and does not look broken
-
-### J4. Report without scenarios artifact
-
-- delete `scenarios.json`
-- verify report degrades gracefully or produces a clear error
-
-### J5. Report before changed run exists
-
-- run `report` without `changed-run.json`
-- verify error is explicit and actionable
-
-## K. Determinism And Repeatability
-
-### K1. Repeated `scan`
-
-- run `scan` twice in a row
-- verify artifacts are byte-stable or meaningfully stable aside from timestamp fields
-
-### K2. Repeated `generate`
-
-- run `generate` twice in a row
-- verify no churn in generated files beyond expected timestamps
-
-### K3. Cross-platform paths
-
-- compare Windows and POSIX outputs
-- verify stored file paths are normalized consistently
-
-### K4. Git-friendliness
-
-- inspect generated JSON and markdown in git diff
-- verify artifacts are reviewable and low-noise
-
-## L. Edge Cases Worth Testing Early
-
-### L1. Dynamic routes without fixtures
-
-- verify generated tests for `/blog/[slug]` do not become unusable without parameter handling
-
-### L2. Auth-gated pages that redirect immediately
-
-- verify baseline and changed behavior is understandable
-
-### L3. Routes requiring seeded data
-
-- verify generated tests either fail clearly or provide extension points for setup
-
-### L4. Locale-specific URLs
-
-- test apps where locale is part of pathname rather than app state
-
-### L5. Very large repos
-
-- verify scan time and memory use remain acceptable
-
-### L6. Symlinked monorepo packages
-
-- verify `rootDir` and scanning do not break on common workspace layouts
-
-## Suggested Order To Test
-
-1. Packaging and CLI help/version
-2. `init` and config handling
-3. Route discovery against tiny fixtures
-4. Signal scanning and deterministic scenario generation
-5. Generated Playwright tests
-6. Baseline run on a simple Next.js sample app
-7. Changed-run diff capture after a visual change
-8. Markdown reporting
-9. Cross-platform and monorepo cases
-
-## Useful Sample Repos To Build For Testing
-
-### Sample 1. Tiny happy-path Next app
-
-- app router only
-- one static route
-- one loading branch
-- one form
-
-### Sample 2. Dynamic route repo
-
-- app router with `[slug]`, `[...parts]`, and `[[...parts]]`
-
-### Sample 3. Auth-heavy repo
-
-- routes that branch on session, admin role, and permissions
-
-### Sample 4. Monorepo
-
-- root config with `rootDir: apps/web`
-
-### Sample 5. Non-Next repo
-
-- Vite React app to validate unsupported-stack behavior
-
-## Bug Report Template
-
-Use this format when filing issues for yourself later.
-
-```md
-### Title
-
-### Severity
-
-### Environment
-- OS:
-- Node:
-- npm/pnpm/yarn:
-- Spotter version:
-
-### Repro Steps
-1.
-2.
-3.
-
-### Expected
-
-### Actual
-
-### Logs / Output
-
-### Artifacts Affected
-- config:
-- route manifest:
-- signals:
-- heuristics:
-- scenarios:
-- scenario plan:
-- baseline run:
-- changed run:
-- report:
-
-### Notes
+```json
+"command": "npm run start"
 ```
 
-## Immediate Priorities
+and the app had to be built before baseline.
 
-If you only fix a few things first, I would start with:
+This is workable, but the package defaults still steer users toward the less stable dev-server route.
 
-1. Package executable correctness for `npx`
-2. Correct CLI version output
-3. README command consistency
-4. Clear failures when baseline or changed is run out of order
-5. Dynamic route handling and test generation on real sample apps
+## UX Fixture Results Summary
 
-## Updated Remaining Priorities After Example Fixture Pass
+### Scan and generate
 
-Added persistent fixture repos under `examples/`:
+- passed
+- significantly improved over the previous package version
 
-- `examples/fixture-next-ux`
-- `examples/fixture-react-vite`
-- `examples/fixture-vue-vite`
+### Baseline with default dev server
 
-Automated verification now covers those fixtures in `tests/example-fixtures.test.ts`.
+- still flaky / unstable on this fixture
 
-Current fixture results:
+### Baseline with production server after `npm run build`
 
-- `fixture-next-ux`: `scan` and deterministic test generation behave as expected after the recent fixes.
-- `fixture-react-vite`: Spotter does not crash, scans TSX signals, and does not invent routes.
-- `fixture-vue-vite`: Spotter now scans `.vue` SFC loading, empty, form, responsive, and locale states instead of silently skipping them.
+- passed
+- all `40` tests completed successfully
 
-New local status after the latest changes:
+### Changed after successful baseline
 
-- explicit unsupported-framework messaging is implemented for `scan` and `generate`
-- Vue SFC signal scanning is implemented and covered by fixture tests
-- `generate` can now load an explicit LLM fallback from `spotter.config.*` or `--llm-*` CLI overrides when deterministic routes are absent
-- deterministic success, feature-flag, responsive-layout, and localization heuristics are implemented and covered by unit tests
-- these latest changes are validated locally but are not published in a newer npm package yet
+- failed due to invalid generated config syntax
 
-Backlog structure at this point:
+### Report after failed changed run
 
-### Fixed Historical Bugs
+- succeeded, but summarized a misleading `0 changed` failure artifact
 
-- Windows `baseline` spawn failure is fixed.
-- Windows `changed` spawn failure is fixed.
-- Windows absolute-path Playwright config issue is fixed.
-- Generated file collisions across viewport and locale targets are fixed.
-- Empty-state detection for array-length comparisons is fixed.
-- Dynamic-route sample path generation is fixed.
-- `report` now gives actionable missing-artifact guidance.
-- CLI shebang and version metadata issues are fixed.
-- Unsupported-framework CLI messaging is fixed.
-- Vue SFC signal scanning is fixed.
-- Success-state deterministic heuristics are fixed.
-- Feature-flag deterministic heuristics are fixed.
-- Responsive nav or layout deterministic heuristics are fixed.
-- Localization-specific deterministic heuristics are fixed.
+## No-Route Fixture Results Summary
 
-### Confirmed Remaining Bugs Or Product Gaps
+### Scan
 
-No remaining deterministic scanner gaps are currently confirmed in this backlog slice. The previous top four gaps for success-state, feature-flag, responsive-layout, and localization-specific coverage are now implemented and validated locally.
+- passed
+- clear `0 routes` messaging
+- still captured `3` UX signals
 
-### High-Risk Paths Still Needing Real Validation
+### Generate
 
-1. The new CLI-configured LLM fallback has now been exercised end to end against a real local Ollama provider, but small-model output quality remains a product risk.
-  - Severity: medium-high
-  - Why it matters: the provider transport and schema validation path are working, but `qwen2.5:0.5b` returned empty scenario sets for the React and Vue fixtures and produced an invalid scenario object during direct provider probing. The remaining risk is model quality and prompt robustness, not endpoint wiring.
+- passed
+- clear `0 scenarios` messaging
+- no silent failure or confusing empty output
 
-2. The newest local fixes are not yet published in a newer npm package.
-  - Severity: medium-high
-  - Why it matters: until the next release is published, `@latest` does not include the Vue SFC scanner or the new CLI-configured LLM fallback.
+## Recommended Priorities After 0.1.3
 
-3. The next published package still needs clean-install smoke tests for the Windows baseline or changed workflow and the new `generate --llm-*` path.
-  - Severity: medium
-  - Why it matters: those are integration-heavy flows where packaging, config loading, and runtime dependencies can still regress.
+1. Fix `playwright.changed.config.mjs` generation so `changed` becomes executable again.
+2. Separate failed-run semantics from legitimate zero-diff semantics in the changed artifact and report layer.
+3. Revisit the default baseline workflow for Next.js dev servers, because `npm run dev` is still too unstable on this fixture.
 
-Priority order to fix or validate from here:
+## Current Repo Status After Follow-up Fixes
 
-1. Publish the next npm version and rerun clean-install smoke tests, including Windows baseline or changed and the new `generate --llm-*` flow.
-2. Improve fallback prompt robustness or recommend a stronger local model before treating route-less LLM fallback as production-ready.
+These notes describe the current repository state after follow-up fixes made after the `0.1.3` retest above. The sections above still accurately capture what the published `0.1.3` package did during retest, but they no longer reflect the latest implementation in this repo.
 
-Recommended next manual verification order:
+### Fixed since the retest
 
-1. Publish the next npm version.
-2. Re-run the Next, React, and Vue fixtures from a clean install using the published package on Windows.
-3. Re-run the React and Vue fixtures with a stronger local or hosted model to benchmark fallback scenario quality.
+#### 1. `changed` config generation is now valid
+
+- status: fixed in repo
+- the generated `playwright.changed.config.mjs` now writes `outputDir` with valid syntax
+- `changed` is no longer blocked by the missing-comma regression from the published retest
+
+#### 2. `changed` now distinguishes execution failure from a real 0-diff run
+
+- status: fixed in repo
+- changed-run artifacts now record whether the run actually completed
+- execution failures are reported as incomplete runs instead of misleading `0 changed screenshots`
+
+#### 3. `report` no longer treats execution failure as a legitimate no-diff result
+
+- status: fixed in repo
+- report output now distinguishes incomplete changed runs from successful no-diff runs
+- this closes the misleading summary behavior described in the retest
+
+#### 4. Baseline and changed now support a dedicated `captureServer`
+
+- status: implemented in repo
+- screenshot capture can now use a production-style command without changing the regular local `devServer`
+- this mitigates the baseline instability workaround found in the retest
+- example shape:
+
+```json
+{
+  "devServer": {
+    "command": "npm run dev",
+    "reuseExistingServer": true,
+    "timeoutMs": 120000
+  },
+  "captureServer": {
+    "command": "npm run start",
+    "reuseExistingServer": true,
+    "timeoutMs": 120000
+  }
+}
+```
+
+#### 5. Manual IDE-assist workflow now exists
+
+- status: implemented in repo
+- `spotter prompt` writes a copy-pasteable scenario-assist prompt and JSON context artifact
+- `spotter import --input <path>` validates reviewed JSON suggestions, merges them with deterministic scenarios, and regenerates tests and artifacts
+- this is not part of the original `0.1.3` retest scope, but it is now part of the current repo workflow
+
+### Still open in the current repo
+
+#### 1. Default baseline ergonomics are still weaker than they should be for some Next.js apps
+
+- status: still open
+- the new `captureServer` split gives users a clean fix, but the default starter config still points to `npm run dev`
+- that means the out-of-the-box baseline path can still be flaky on fixtures like `fixture-next-ux` unless users opt into a more stable capture command
+
+#### 2. The main remaining product decision is whether the default should become more opinionated
+
+- status: still open
+- likely options are:
+  - keep the current default and document `captureServer` as the recommended stability path
+  - change starter guidance so capture defaults are more production-oriented for frameworks like Next.js
+  - add stronger workflow guidance or validation around unstable dev-server capture
+
+### Updated priority order for the current repo
+
+1. Revisit the default baseline workflow and starter guidance for screenshot stability.
+2. Decide how strongly Spotter should steer users toward `captureServer` for baseline and changed runs.
+3. Continue the release-readiness backlog below after the baseline-default decision is settled.
+
+## Deliverables Created During This Retest
+
+- `fixture-next-ux`
+- `fixture-no-routes`
+- `SPOTTER_TEST_PLAN_AND_BUGS.md`
+- `SPOTTER_UX_FIXTURE_FINDINGS.md`
+- `SPOTTER_0_1_3_RETEST.md`
+
+
+## Future ideas to complete before package is fully ready.
+
+Build a real framework acceptance suite across actual repo shapes.
+Done when: CI runs init, scan, generate, baseline, changed, and report successfully on small but realistic fixtures for Next app router, Next pages router, Remix, Nuxt, React Router, Vue Router, and one monorepo with rootDir.
+
+Add first-class state-driving hooks so generated scenarios are executable, not just named correctly.
+Done when: users can configure route params, auth state, roles, feature flags, locale, cookies, query params, and seeded data per scenario or per route without hand-editing generated tests.
+
+Make dynamic routes and stateful routes configurable through fixture inputs.
+Done when: a repo with /blog/[slug], /products/[id], auth redirects, or feature-gated screens can produce meaningful generated tests using configured sample params and setup data instead of generic placeholders.
+
+Harden determinism guarantees for scan and generate.
+Done when: repeated scan and generate runs on unchanged code produce stable JSON ordering, stable filenames, stable scenario IDs, and low-noise diffs across Windows and POSIX.
+
+Add a doctor or validate command for environment readiness.
+Done when: one command checks config validity, route adapter detection, Playwright install, browser availability, app URL reachability, dev server command, and required artifact prerequisites, then prints actionable fixes.
+
+Improve scenario quality from “state detected” to “state usefully modeled.”
+Done when: generated scenarios consistently distinguish default, loading, empty, error, success, auth gate, role gate, modal, responsive, localization, and feature-flag states in a way that maps to how real teams think about regressions.
+
+Add scale and performance guardrails for medium and large repos.
+Done when: Spotter can scan and generate within acceptable time and memory budgets on at least one medium monorepo-sized fixture, and it avoids crawling build outputs, generated folders, and irrelevant directories by default.
+
+Version and validate all artifact schemas.
+Done when: route-manifest.json, component-signals.json, component-heuristics.json, scenarios.json, scenario-plan.json, baseline-run.json, changed-run.json, and visual-report.md have stable, documented structure with schema-version handling for upgrades.
+
+Ship framework-specific quickstarts and troubleshooting docs.
+Done when: the README and docs include one known-good workflow each for Next, Remix, React Router, Nuxt, and Vue Router, plus explicit guidance for auth, dynamic params, monorepos, seeded data, and CI usage.
+
+Add release-blocking end-to-end tests around truthfulness, not just happy paths.
+Done when: CI proves that Spotter correctly distinguishes success, no-route, no-diff, changed-diff, invalid-config, missing-baseline, and runner-failure cases, with correct exit codes and non-misleading artifacts/reports.
+
+Make CI integration a product feature, not just an implied use case.
+Done when: you have one documented GitHub Actions example that installs browsers, runs baseline or changed safely, uploads artifacts, and produces a report teams can actually consume in PR workflows.
+
+Define a narrow release bar for “majority of UX repos.”
+Done when: you can honestly say “works reliably on standard frontend repos with file-based or declarative routing, basic auth/role branches, dynamic params, and common UI states” and you have fixture evidence to back that claim.

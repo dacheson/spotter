@@ -1,0 +1,1 @@
+﻿{"provider":"ide-manual","model":"copilot-chat","scenarios":[{"id":"products-feature-flag-state","routePath":"/products","name":"Products Feature Flag State","priority":"low","tags":["feature-flag"]}]}

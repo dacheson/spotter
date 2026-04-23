@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadSpotterConfig } from '../config/index.js';
+import { loadSpotterConfig, resolveCaptureServerConfig } from '../config/index.js';
 import type { SpotterDevServerConfig } from '../config/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
 import { createNpxCommand, runExternalCommand } from './command.js';
@@ -57,7 +57,7 @@ export async function runBaselineCommand(
       appUrl: config.appUrl,
       baselineDir,
       configDir: artifactsDir,
-      devServer: createResolvedDevServerConfig(cwd, config.devServer),
+      devServer: createResolvedDevServerConfig(cwd, resolveCaptureServerConfig(config)),
       testDir
     }),
     'utf8'

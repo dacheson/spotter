@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadSpotterConfig } from '../config/index.js';
+import { loadSpotterConfig, resolveCaptureServerConfig } from '../config/index.js';
 import type { SpotterDevServerConfig } from '../config/index.js';
 import { collectDiffSummary, type DiffSummary } from '../diff/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
@@ -30,6 +30,9 @@ export interface ChangedCommandResult {
   testDir: string;
   command: string;
   args: string[];
+  completed: boolean;
+  exitCode: number;
+  failureMessage?: string;
   passed: boolean;
   summary: DiffSummary;
 }
@@ -54,7 +57,7 @@ export async function runChangedCommand(
       appUrl: config.appUrl,
       baselineDir,
       configDir: artifactsDir,
-      devServer: config.devServer,
+      devServer: createResolvedDevServerConfig(cwd, resolveCaptureServerConfig(config)),
       testDir,
       resultsDir
     }),
@@ -67,6 +70,10 @@ export async function runChangedCommand(
   const runner = dependencies.runner ?? runExternalCommand;
   const runResult = await runner({ command, args, cwd });
   const summary = await collectDiffSummary(resultsDir);
+  const completed = runResult.exitCode === 0 || summary.changed > 0;
+  const failureMessage = completed
+    ? undefined
+    : `Playwright changed run failed before visual comparison completed (exit code ${runResult.exitCode}).`;
   const artifact = await writeArtifactRecord(
     {
       kind: 'changed',
@@ -77,6 +84,9 @@ export async function runChangedCommand(
       testDir,
       command,
       args,
+      completed,
+      exitCode: runResult.exitCode,
+      failureMessage,
       passed: runResult.exitCode === 0,
       summary
     },
@@ -92,6 +102,9 @@ export async function runChangedCommand(
     testDir,
     command,
     args,
+    completed,
+    exitCode: runResult.exitCode,
+    failureMessage,
     passed: runResult.exitCode === 0,
     summary
   };
@@ -114,7 +127,7 @@ export function createChangedPlaywrightConfigContents(paths: {
   }).trimEnd();
   const outputDir = createConfigRelativePlaywrightPath(paths.configDir, paths.resultsDir);
 
-  return `${baselineConfig.slice(0, -3)}  outputDir: ${JSON.stringify(outputDir)}\n});\n`;
+  return baselineConfig.replace(/\n\}\);\n?$/, `,\n  outputDir: ${JSON.stringify(outputDir)}\n});\n`);
 }
 
 function createConfigRelativePlaywrightPath(configDir: string, targetPath: string): string {
@@ -126,4 +139,25 @@ function createConfigRelativePlaywrightPath(configDir: string, targetPath: strin
   }
 
   return `./${normalizedPath}`;
+}
+
+function createResolvedDevServerConfig(
+  cwd: string,
+  devServer: SpotterDevServerConfig | null
+): SpotterDevServerConfig | null {
+  if (!devServer) {
+    return null;
+  }
+
+  const resolvedDevServer: SpotterDevServerConfig = {
+    command: devServer.command,
+    reuseExistingServer: devServer.reuseExistingServer,
+    timeoutMs: devServer.timeoutMs
+  };
+
+  if (devServer.cwd) {
+    resolvedDevServer.cwd = path.resolve(cwd, devServer.cwd);
+  }
+
+  return resolvedDevServer;
 }

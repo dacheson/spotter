@@ -87,7 +87,7 @@ export function buildScenarioEnhancementPrompts(input: LlmEnhancementInput): {
   userPrompt: string;
 } {
   const systemPrompt =
-    'You are Spotter, a deterministic-first UX scenario planner. Return JSON only. Suggest only missing scenarios that add clear coverage value.';
+    'You are Spotter, a deterministic-first UX scenario planner. Return JSON only. Suggest only missing scenarios that add clear coverage value. Do not repeat existing scenarios. If no routes are provided, prefer routePath "/" unless the repo context clearly supports another user-facing path.';
   const userPrompt = [
     'Routes:',
     JSON.stringify(input.routes, null, 2),
@@ -100,6 +100,11 @@ export function buildScenarioEnhancementPrompts(input: LlmEnhancementInput): {
     '',
     'Return JSON with shape:',
     JSON.stringify({ provider: 'provider-name', model: 'model-name', scenarios: [] }, null, 2),
+    '',
+    'Route guidance:',
+    input.routes.length > 0
+      ? 'Use the listed routes when proposing routePath values.'
+      : 'No deterministic routes were found. Default routePath to "/" unless the repo context clearly supports another user-facing path.',
     '',
     input.instructions ? `Extra instructions: ${input.instructions}` : 'Extra instructions: none'
   ].join('\n');

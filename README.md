@@ -93,6 +93,8 @@ npm install -D @dcacheson/spotter @playwright/test
 npx playwright install
 npx spotter init
 npx spotter scan
+npx spotter prompt
+npx spotter import --input .spotter/artifacts/manual-response.json
 npx spotter generate
 npx spotter baseline
 npx spotter changed
@@ -104,6 +106,8 @@ npx spotter report
 ```bash
 spotter init
 spotter scan
+spotter prompt
+spotter import --input .spotter/artifacts/manual-response.json
 spotter generate
 spotter baseline
 spotter changed
@@ -115,9 +119,11 @@ What a regular developer does:
 1. Run `spotter init` once to create `spotter.config.json`.
 2. Adjust `appUrl` or `devServer` if the app does not run on the defaults.
 3. Run `spotter scan` to discover routes and UI-state signals.
-4. Run `spotter generate` to write deterministic Playwright specs.
-5. Run `spotter baseline` to capture snapshot baselines.
-6. After code changes, run `spotter changed` and then `spotter report`.
+4. Run `spotter prompt` when you want a copy-pasteable IDE prompt for manual scenario suggestions.
+5. Paste the prompt into your IDE agent and save its JSON response.
+6. Run `spotter import --input <path>` to merge reviewed suggestions and regenerate tests.
+7. Run `spotter baseline` to capture snapshot baselines.
+8. After code changes, run `spotter changed` and then `spotter report`.
 
 The CLI now supports starter config generation, deterministic repository scanning, deterministic Playwright test generation, baseline capture, changed-run comparison, and artifact-backed reporting.
 
@@ -151,6 +157,7 @@ The default starter config includes:
 * `devServer.command: "npm run dev"`
 * `devServer.reuseExistingServer: true`
 * `devServer.timeoutMs: 120000`
+* optional `captureServer` override for baseline and changed runs
 * `llm.fallback: null`
 
 Generated Playwright test files are written to the configured `testsDir` path, which defaults to `.spotter/tests`.
@@ -161,7 +168,7 @@ Generated tests use deterministic screenshot assertions with disabled animations
 
 `spotter baseline` runs `playwright test --update-snapshots` against the generated tests and stores baseline screenshots in the configured `screenshotsDir`, which defaults to `.spotter/baselines`.
 
-That generated Playwright config now also injects `use.baseURL` from `appUrl` and an optional `webServer` block from `devServer`, so the baseline and changed commands can start the app automatically for typical local development.
+That generated Playwright config now also injects `use.baseURL` from `appUrl` and an optional `webServer` block. By default, baseline and changed inherit `devServer`, but they can now use a separate `captureServer` override when screenshot capture needs a more stable production-style command.
 
 `spotter changed` reruns the generated tests against those baselines and reports any changed image paths found in the Playwright results output.
 
@@ -178,6 +185,10 @@ When no deterministic routes are found, the scan summary now also records the in
 Scenario priorities are now assigned deterministically from route metadata, tags, heuristics, and auth or role signals.
 
 The `generate` command turns the current route and state scan into deterministic scenarios, expands them across configured locales and viewports, writes the generated Playwright tests, and stores scenario artifacts alongside the scan output.
+
+The `prompt` command writes a manual-assist prompt and a structured context artifact so developers can paste the current coverage snapshot into an IDE agent chat and ask for additional scenario ideas without wiring a live provider into Spotter.
+
+The `import` command reads a reviewed JSON response from that prompt flow, validates it against Spotter's scenario schema, merges it with deterministic scenarios, reprioritizes the combined set, and regenerates the scenario artifacts and Playwright tests.
 
 If deterministic route discovery returns no routes, the default generate flow now says that clearly. Users can now enable an LLM fallback through `spotter.config.*` or per-run `spotter generate` flags so Spotter can infer scenarios from scanned UX signals when deterministic adapters are insufficient.
 
@@ -202,6 +213,9 @@ Spotter writes its working output into the repository so it can be reviewed in g
 * `.spotter/artifacts/component-heuristics.json`
 * `.spotter/artifacts/scenarios.json`
 * `.spotter/artifacts/scenario-plan.json`
+* `.spotter/artifacts/scenario-assist.prompt.md`
+* `.spotter/artifacts/scenario-assist.context.json`
+* `.spotter/artifacts/scenario-import.json`
 * `.spotter/artifacts/changed-run.json`
 * `.spotter/artifacts/visual-report.md`
 
@@ -254,6 +268,26 @@ If you want Spotter to assume the app is already running, disable automatic star
 	"devServer": null
 }
 ```
+
+If your normal local workflow uses a dev server but visual capture is more stable against a production-style server, configure a separate capture command:
+
+```json
+{
+	"appUrl": "http://127.0.0.1:3000",
+	"devServer": {
+		"command": "npm run dev",
+		"reuseExistingServer": true,
+		"timeoutMs": 120000
+	},
+	"captureServer": {
+		"command": "npm run start",
+		"reuseExistingServer": true,
+		"timeoutMs": 120000
+	}
+}
+```
+
+When `captureServer` is set, `spotter baseline` and `spotter changed` use it instead of `devServer`. When it is omitted, they keep using `devServer` for backward compatibility.
 
 If you want `generate` to fall back to an LLM when deterministic route adapters find no routes, configure it explicitly:
 

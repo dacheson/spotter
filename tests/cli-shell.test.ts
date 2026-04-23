@@ -28,16 +28,20 @@ describe('cli shell', () => {
 
     const helpText = program.helpInformation();
     const generateHelpText = program.commands.find((command) => command.name() === 'generate')?.helpInformation() ?? '';
+    const importHelpText = program.commands.find((command) => command.name() === 'import')?.helpInformation() ?? '';
 
     expect(helpText).toContain('spotter [options] [command]');
     expect(helpText).toContain('init');
     expect(helpText).toContain('scan');
     expect(helpText).toContain('generate');
+    expect(helpText).toContain('prompt');
+    expect(helpText).toContain('import');
     expect(helpText).toContain('baseline');
     expect(helpText).toContain('changed');
     expect(helpText).toContain('report');
     expect(generateHelpText).toContain('--llm-fallback');
     expect(generateHelpText).toContain('--llm-provider <provider>');
+    expect(importHelpText).toContain('--input <path>');
   });
 
   it('routes command execution through the configured handler', async () => {
@@ -88,6 +92,23 @@ describe('cli shell', () => {
         llmModel: 'llama3.1',
         llmBaseUrl: 'http://127.0.0.1:11434/v1',
         llmMaxGeneratedScenarios: 2
+      }
+    });
+  });
+
+  it('passes import input options through the command context', async () => {
+    const recorder = vi.fn<(context: CliActionContext) => void>();
+
+    await runCli(['node', 'spotter', 'import', '--input', 'manual.json'], {
+      environment: { cwd: '/repo' },
+      handlers: createHandlers(recorder)
+    });
+
+    expect(recorder).toHaveBeenCalledWith({
+      commandName: 'import',
+      environment: { cwd: '/repo' },
+      importOptions: {
+        inputPath: 'manual.json'
       }
     });
   });

@@ -14,7 +14,9 @@ export interface VisualReportDiff extends DiffArtifact {
 export interface VisualReportSummary {
   artifactPath: string;
   changedScenarios: number;
+  completed: boolean;
   diffs: VisualReportDiff[];
+  failureMessage?: string;
   generatedAt: string;
   passed: boolean;
   totalScenarios: number;
@@ -54,6 +56,7 @@ export async function readVisualReportSummary(
   return {
     artifactPath: changedArtifactPath,
     changedScenarios: changedArtifact.summary.changed,
+    completed: changedArtifact.completed ?? true,
     diffs: changedArtifact.summary.artifacts.map((artifact) => {
       const scenario = scenariosById[artifact.scenarioId];
 
@@ -63,6 +66,7 @@ export async function readVisualReportSummary(
         scenarioName: scenario?.name ?? artifact.scenarioId
       };
     }),
+    failureMessage: changedArtifact.failureMessage,
     generatedAt: changedArtifact.generatedAt,
     passed: changedArtifact.passed,
     totalScenarios: scenarios.length
@@ -72,7 +76,9 @@ export async function readVisualReportSummary(
 export function renderVisualReportSummary(summary: VisualReportSummary): string[] {
   const groupedCounts = countDiffsByPriority(summary.diffs);
   const lines = [
-    `Changed run ${summary.passed ? 'passed' : 'failed'}.`,
+    summary.completed
+      ? `Changed run ${summary.passed ? 'passed' : 'failed'}.`
+      : 'Changed run did not complete.',
     `Generated at ${summary.generatedAt}.`,
     `Total scenarios: ${summary.totalScenarios}.`,
     `Changed scenarios: ${summary.changedScenarios}.`,
@@ -81,6 +87,10 @@ export function renderVisualReportSummary(summary: VisualReportSummary): string[
     `Low priority diffs: ${groupedCounts.low}.`,
     `Unknown priority diffs: ${groupedCounts.unknown}.`
   ];
+
+  if (summary.failureMessage) {
+    lines.splice(1, 0, summary.failureMessage);
+  }
 
   for (const diff of summary.diffs) {
     lines.push(`[${diff.priority}] ${diff.scenarioName}: ${diff.diffPath}`);
@@ -94,7 +104,7 @@ export function renderVisualReportMarkdown(summary: VisualReportSummary): string
   const lines = [
     '# Spotter Visual Report',
     '',
-    `Status: **${summary.passed ? 'Passed' : 'Failed'}**`,
+    `Status: **${summary.completed ? (summary.passed ? 'Passed' : 'Failed') : 'Incomplete'}**`,
     `Generated: ${summary.generatedAt}`,
     `Changed artifact: ${summary.artifactPath}`,
     '',
@@ -109,6 +119,10 @@ export function renderVisualReportMarkdown(summary: VisualReportSummary): string
     `| Low priority diffs | ${groupedCounts.low} |`,
     `| Unknown priority diffs | ${groupedCounts.unknown} |`
   ];
+
+  if (summary.failureMessage) {
+    lines.splice(5, 0, `Failure: ${summary.failureMessage}`);
+  }
 
   if (summary.diffs.length === 0) {
     lines.push('', '## Diffs', '', 'No visual diffs were detected.');

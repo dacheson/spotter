@@ -28,6 +28,7 @@ describe('config loader', () => {
 
     expect(loaded.configPath).toBeNull();
     expect(loaded.config.appUrl).toBe('http://127.0.0.1:3000');
+    expect(loaded.config).not.toHaveProperty('captureServer');
     expect(loaded.config.devServer).toEqual({
       command: 'npm run dev',
       reuseExistingServer: true,
@@ -60,6 +61,10 @@ describe('config loader', () => {
       JSON.stringify(
         {
           appUrl: 'http://127.0.0.1:4000',
+          captureServer: {
+            command: 'pnpm start',
+            timeoutMs: 60000
+          },
           devServer: {
             command: 'pnpm dev',
             timeoutMs: 30000
@@ -86,6 +91,11 @@ describe('config loader', () => {
 
     expect(loaded.configPath).toBe(configPath);
     expect(loaded.config.appUrl).toBe('http://127.0.0.1:4000');
+    expect(loaded.config.captureServer).toEqual({
+      command: 'pnpm start',
+      reuseExistingServer: true,
+      timeoutMs: 60000
+    });
     expect(loaded.config.devServer).toEqual({
       command: 'pnpm dev',
       reuseExistingServer: true,
@@ -122,6 +132,7 @@ describe('config loader', () => {
       [
         'export default {',
         "  appUrl: 'http://127.0.0.1:3100',",
+        '  captureServer: { command: \'npm run start\', reuseExistingServer: false, cwd: \'apps/web\', timeoutMs: 90000 },',
         '  devServer: { command: \'npm run start\', reuseExistingServer: false, cwd: \'apps/web\', timeoutMs: 45000 },',
         '  llm: { fallback: { enabled: true, provider: \'openai\', model: \'gpt-5.4\', apiKeyEnvVar: \'OPENAI_API_KEY\' } },',
         "  rootDir: 'apps/web',",
@@ -136,6 +147,12 @@ describe('config loader', () => {
 
     expect(loaded.configPath).toBe(configPath);
     expect(loaded.config.appUrl).toBe('http://127.0.0.1:3100');
+    expect(loaded.config.captureServer).toEqual({
+      command: 'npm run start',
+      reuseExistingServer: false,
+      cwd: 'apps/web',
+      timeoutMs: 90000
+    });
     expect(loaded.config.devServer).toEqual({
       command: 'npm run start',
       reuseExistingServer: false,
@@ -184,5 +201,34 @@ describe('config loader', () => {
 
     expect(loaded.configPath).toBe(configPath);
     expect(loaded.config.devServer).toBeNull();
+  });
+
+  it('supports disabling capture startup separately from the developer startup server', async () => {
+    const cwd = await createTempDir();
+    const configPath = path.join(cwd, 'spotter.config.json');
+
+    await writeFile(
+      configPath,
+      JSON.stringify(
+        {
+          captureServer: null,
+          devServer: {
+            command: 'npm run dev'
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const loaded = await loadSpotterConfig({ cwd });
+
+    expect(loaded.configPath).toBe(configPath);
+    expect(loaded.config.captureServer).toBeNull();
+    expect(loaded.config.devServer).toEqual({
+      command: 'npm run dev',
+      reuseExistingServer: true,
+      timeoutMs: 120000
+    });
   });
 });

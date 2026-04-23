@@ -74,6 +74,7 @@ describe('visual report summary', () => {
     expect(summary).toEqual({
       artifactPath: path.resolve(cwd, '.spotter/artifacts/changed-run.json'),
       changedScenarios: 1,
+      completed: true,
       diffs: [
         {
           scenarioId: 'checkout-error-state',
@@ -85,6 +86,7 @@ describe('visual report summary', () => {
         }
       ],
       generatedAt: '2026-04-19T12:00:00.000Z',
+      failureMessage: undefined,
       passed: false,
       totalScenarios: 1
     });
@@ -122,6 +124,81 @@ describe('visual report summary', () => {
       '| Priority | Scenario | Diff | Baseline | Current |',
       '| --- | --- | --- | --- | --- |',
       '| high | Checkout Error State | diff.png | baseline.png | current.png |'
+    ].join('\n'));
+  });
+
+  it('renders incomplete changed runs as execution failures instead of no-diff reports', async () => {
+    const cwd = await createTempDir();
+
+    await writeJson(cwd, '.spotter/artifacts/changed-run.json', {
+      kind: 'changed',
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      baselineDir: 'C:/repo/.spotter/baselines',
+      configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
+      resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
+      testDir: 'C:/repo/.spotter/tests',
+      command: 'npx',
+      args: ['playwright', 'test', '--config', 'config'],
+      completed: false,
+      exitCode: 1,
+      failureMessage: 'Playwright changed run failed before visual comparison completed (exit code 1).',
+      passed: false,
+      summary: {
+        changed: 0,
+        unchanged: 0,
+        artifacts: []
+      }
+    });
+    await writeJson(cwd, '.spotter/artifacts/scenarios.json', {
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      scenarios: []
+    });
+
+    const summary = await readVisualReportSummary({ cwd });
+
+    expect(summary).toEqual({
+      artifactPath: path.resolve(cwd, '.spotter/artifacts/changed-run.json'),
+      changedScenarios: 0,
+      completed: false,
+      diffs: [],
+      failureMessage: 'Playwright changed run failed before visual comparison completed (exit code 1).',
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      passed: false,
+      totalScenarios: 0
+    });
+    expect(renderVisualReportSummary(summary)).toEqual([
+      'Changed run did not complete.',
+      'Playwright changed run failed before visual comparison completed (exit code 1).',
+      'Generated at 2026-04-19T12:00:00.000Z.',
+      'Total scenarios: 0.',
+      'Changed scenarios: 0.',
+      'High priority diffs: 0.',
+      'Medium priority diffs: 0.',
+      'Low priority diffs: 0.',
+      'Unknown priority diffs: 0.'
+    ]);
+    expect(renderVisualReportMarkdown(summary)).toBe([
+      '# Spotter Visual Report',
+      '',
+      'Status: **Incomplete**',
+      'Generated: 2026-04-19T12:00:00.000Z',
+      `Changed artifact: ${path.resolve(cwd, '.spotter/artifacts/changed-run.json')}`,
+      'Failure: Playwright changed run failed before visual comparison completed (exit code 1).',
+      '',
+      '## Summary',
+      '',
+      '| Metric | Value |',
+      '| --- | ---: |',
+      '| Total scenarios | 0 |',
+      '| Changed scenarios | 0 |',
+      '| High priority diffs | 0 |',
+      '| Medium priority diffs | 0 |',
+      '| Low priority diffs | 0 |',
+      '| Unknown priority diffs | 0 |',
+      '',
+      '## Diffs',
+      '',
+      'No visual diffs were detected.'
     ].join('\n'));
   });
 

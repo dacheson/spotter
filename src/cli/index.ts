@@ -11,15 +11,23 @@ import {
 import {
   createGenerateWorkflowDependencies,
   type GenerateCommandOptions,
+  type ImportWorkflowResult,
+  runImportWorkflow,
   runGenerateWorkflow,
   runInitWorkflow,
+  runPromptWorkflow,
   runReportWorkflow,
   runScanWorkflow,
   type GenerateWorkflowResult,
   type InitWorkflowResult,
+  type PromptWorkflowResult,
   type ReportWorkflowResult,
   type ScanWorkflowResult
 } from './workflows.js';
+
+export interface ImportCommandOptions {
+  inputPath: string;
+}
 
 export interface CliEnvironment {
   cwd: string;
@@ -34,6 +42,7 @@ export interface CliActionContext {
   commandName: string;
   environment: CliEnvironment;
   generateOptions?: GenerateCommandOptions;
+  importOptions?: ImportCommandOptions;
 }
 
 export interface CliCommandHandler {
@@ -49,8 +58,10 @@ export interface CreateDefaultCliHandlersOptions {
   llmInstructions?: string;
   llmProvider?: import('../llm/index.js').LlmProvider;
   maxGeneratedScenarios?: number;
+  runImport?: (options: { cwd: string; inputPath: string }) => Promise<ImportWorkflowResult>;
   runGenerate?: (options: { cwd: string }, dependencies?: import('./workflows.js').GenerateWorkflowDependencies) => Promise<GenerateWorkflowResult>;
   runInit?: (options: { cwd: string }) => Promise<InitWorkflowResult>;
+  runPrompt?: (options: { cwd: string }) => Promise<PromptWorkflowResult>;
   write?: (message: string) => void;
   runBaseline?: (options: { cwd: string }) => Promise<BaselineCommandResult>;
   runChanged?: (options: { cwd: string }) => Promise<ChangedCommandResult>;
@@ -70,6 +81,14 @@ export const cliCommandDefinitions: CliCommandDefinition[] = [
   {
     name: 'generate',
     description: 'Generate Playwright coverage files from the current scenario plan.'
+  },
+  {
+    name: 'prompt',
+    description: 'Write an IDE-assist prompt for manual scenario coverage suggestions.'
+  },
+  {
+    name: 'import',
+    description: 'Import manual IDE scenario suggestions and regenerate coverage artifacts.'
   },
   {
     name: 'baseline',
@@ -112,6 +131,8 @@ export function createDefaultCliHandlers(
 
       return runGenerateWorkflow(generateOptions, workflowDependencies);
     });
+  const runImport = options.runImport ?? ((importOptions: { cwd: string; inputPath: string }) => runImportWorkflow(importOptions));
+  const runPrompt = options.runPrompt ?? ((promptOptions: { cwd: string }) => runPromptWorkflow(promptOptions));
   const runBaseline = options.runBaseline ?? ((baselineOptions: { cwd: string }) => runBaselineCommand(baselineOptions));
   const runChanged = options.runChanged ?? ((changedOptions: { cwd: string }) => runChangedCommand(changedOptions));
   const runReport = options.runReport ?? ((reportOptions: { cwd: string }) => runReportWorkflow(reportOptions));
@@ -119,7 +140,7 @@ export function createDefaultCliHandlers(
   return Object.fromEntries(
     cliCommandDefinitions.map((command) => [
       command.name,
-      async ({ commandName, environment, generateOptions }) => {
+      async ({ commandName, environment, generateOptions, importOptions }) => {
         if (commandName === 'init') {
           const result = await runInit({ cwd: environment.cwd });
           write(`Starter config written to ${result.configPath}`);
@@ -171,6 +192,38 @@ export function createDefaultCliHandlers(
           return;
         }
 
+        if (commandName === 'prompt') {
+          const result = await runPrompt({ cwd: environment.cwd });
+          write(
+            `Prepared an assist prompt from ${result.routeCount} routes, ${result.signalCount} signals, and ${result.scenarioCount} deterministic scenarios.`
+          );
+          for (const warning of result.warnings) {
+            write(warning);
+          }
+          write(`Scenario assist prompt written to ${result.promptPath}`);
+          write(`Scenario assist context written to ${result.contextPath}`);
+          return;
+        }
+
+        if (commandName === 'import') {
+          if (!importOptions?.inputPath) {
+            throw new Error('spotter import requires --input <path>.');
+          }
+
+          const result = await runImport({ cwd: environment.cwd, inputPath: importOptions.inputPath });
+          write(
+            `Imported ${result.importedScenarioCount} assisted scenarios and generated ${result.testFileCount} Playwright test files from ${result.scenariosCount} total scenarios.`
+          );
+          for (const warning of result.warnings) {
+            write(warning);
+          }
+          write(`Generated tests written to ${result.outputDir}`);
+          write(`Scenario import artifact written to ${result.proposalArtifactPath}`);
+          write(`Scenario artifact written to ${result.scenariosArtifactPath}`);
+          write(`Scenario plan artifact written to ${result.planArtifactPath}`);
+          return;
+        }
+
         if (commandName === 'baseline') {
           const result = await runBaseline({ cwd: environment.cwd });
           write(`Baseline screenshots stored in ${result.baselineDir}`);
@@ -180,7 +233,13 @@ export function createDefaultCliHandlers(
 
         if (commandName === 'changed') {
           const result = await runChanged({ cwd: environment.cwd });
-          write(`Changed run ${result.passed ? 'passed' : 'failed'} with ${result.summary.changed} changed screenshots.`);
+
+          if (result.completed) {
+            write(`Changed run ${result.passed ? 'passed' : 'failed'} with ${result.summary.changed} changed screenshots.`);
+          } else {
+            write(result.failureMessage ?? `Changed run failed before visual comparison completed (exit code ${result.exitCode}).`);
+          }
+
           write(`Changed artifact written to ${result.artifactPath}`);
 
           for (const artifact of result.summary.artifacts) {
@@ -238,9 +297,11 @@ export function createProgram(dependencies: CliDependencies): Command {
         .option('--llm-api-key-env <name>', 'Override the environment variable used for the LLM API key.')
         .option('--llm-instructions <text>', 'Provide extra instructions for inferred fallback scenarios.')
         .option('--llm-max-generated-scenarios <count>', 'Cap how many fallback scenarios Spotter accepts.', parseIntegerOption);
+    } else if (command.name === 'import') {
+      registeredCommand.requiredOption('--input <path>', 'Path to a JSON response generated from spotter prompt.');
     }
 
-    registeredCommand.action(async (commandOptions?: GenerateCommandOptions) => {
+    registeredCommand.action(async (commandOptions?: GenerateCommandOptions & { input?: string }) => {
       const handler = dependencies.handlers[command.name];
 
       if (!handler) {
@@ -257,6 +318,12 @@ export function createProgram(dependencies: CliDependencies): Command {
 
         if (normalizedOptions !== undefined) {
           actionContext.generateOptions = normalizedOptions;
+        }
+      } else if (command.name === 'import') {
+        const normalizedOptions = normalizeImportOptions(commandOptions as { input?: string } | undefined);
+
+        if (normalizedOptions !== undefined) {
+          actionContext.importOptions = normalizedOptions;
         }
       }
 
@@ -311,6 +378,18 @@ function normalizeGenerateOptions(commandOptions: GenerateCommandOptions | undef
   }
 
   return Object.keys(normalizedOptions).length > 0 ? normalizedOptions : undefined;
+}
+
+function normalizeImportOptions(
+  commandOptions: { input?: string } | undefined
+): ImportCommandOptions | undefined {
+  if (!commandOptions?.input) {
+    return undefined;
+  }
+
+  return {
+    inputPath: commandOptions.input
+  };
 }
 
 function parseIntegerOption(value: string): number {
