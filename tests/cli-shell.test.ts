@@ -36,12 +36,14 @@ describe('cli shell', () => {
     expect(helpText).toContain('generate');
     expect(helpText).toContain('prompt');
     expect(helpText).toContain('import');
+    expect(helpText).toContain('override');
     expect(helpText).toContain('baseline');
     expect(helpText).toContain('changed');
     expect(helpText).toContain('report');
     expect(generateHelpText).toContain('--llm-fallback');
     expect(generateHelpText).toContain('--llm-provider <provider>');
     expect(importHelpText).toContain('--input <path>');
+    expect(program.commands.find((command) => command.name() === 'override')?.helpInformation() ?? '').toContain('--exclude-id <id>');
   });
 
   it('routes command execution through the configured handler', async () => {
@@ -109,6 +111,67 @@ describe('cli shell', () => {
       environment: { cwd: '/repo' },
       importOptions: {
         inputPath: 'manual.json'
+      }
+    });
+  });
+
+  it('passes override include options through the command context', async () => {
+    const recorder = vi.fn<(context: CliActionContext) => void>();
+
+    await runCli(
+      [
+        'node',
+        'spotter',
+        'override',
+        '--include-id',
+        'checkout-empty-state-manual',
+        '--route',
+        '/checkout',
+        '--name',
+        'Checkout Empty State',
+        '--priority',
+        'medium',
+        '--tag',
+        'checkout',
+        '--tag',
+        'empty'
+      ],
+      {
+        environment: { cwd: '/repo' },
+        handlers: createHandlers(recorder)
+      }
+    );
+
+    expect(recorder).toHaveBeenCalledWith({
+      commandName: 'override',
+      environment: { cwd: '/repo' },
+      overrideOptions: {
+        action: 'include',
+        scenario: {
+          id: 'checkout-empty-state-manual',
+          routePath: '/checkout',
+          name: 'Checkout Empty State',
+          priority: 'medium',
+          tags: ['checkout', 'empty']
+        }
+      }
+    });
+  });
+
+  it('passes override exclude options through the command context', async () => {
+    const recorder = vi.fn<(context: CliActionContext) => void>();
+
+    await runCli(['node', 'spotter', 'override', '--exclude-id', 'checkout-loading-state'], {
+      environment: { cwd: '/repo' },
+      handlers: createHandlers(recorder)
+    });
+
+    expect(recorder).toHaveBeenCalledWith({
+      commandName: 'override',
+      environment: { cwd: '/repo' },
+      overrideOptions: {
+        action: 'exclude',
+        scenarioId: 'checkout-loading-state'
       }
     });
   });

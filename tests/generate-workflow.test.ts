@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  artifactSchemaVersion,
   createGenerateWorkflowDependencies,
   createLlmProvider,
   runGenerateWorkflow,
@@ -60,6 +61,7 @@ describe('generate workflow', () => {
     const promptContents = await readFile(result.promptPath, 'utf8');
     const contextContents = JSON.parse(await readFile(result.contextPath, 'utf8')) as {
       routeCount: number;
+      schemaVersion: number;
       signalCount: number;
       scenarioCount: number;
       instructions: string | null;
@@ -80,6 +82,7 @@ describe('generate workflow', () => {
     expect(promptContents).toContain('## Expected Response Shape');
     expect(promptContents).toContain('Extra instructions: Prefer scenarios inferred from explicit empty and modal states.');
     expect(contextContents.routeCount).toBe(0);
+    expect(contextContents.schemaVersion).toBe(artifactSchemaVersion);
     expect(contextContents.signalCount).toBeGreaterThan(0);
     expect(contextContents.scenarioCount).toBe(0);
     expect(contextContents.instructions).toBe('Prefer scenarios inferred from explicit empty and modal states.');
@@ -117,9 +120,11 @@ describe('generate workflow', () => {
 
     const importResult = await runImportWorkflow({ cwd, inputPath });
     const importedProposal = JSON.parse(await readFile(importResult.proposalArtifactPath, 'utf8')) as {
+      schemaVersion: number;
       scenarios: Array<{ id: string; priority: string; routePath: string }>;
     };
     const scenariosArtifact = JSON.parse(await readFile(importResult.scenariosArtifactPath, 'utf8')) as {
+      schemaVersion: number;
       scenarios: Array<{ id: string; priority: string; routePath: string }>;
     };
 
@@ -129,6 +134,8 @@ describe('generate workflow', () => {
     expect(promptContents).toContain('Use the listed routes when proposing routePath values.');
     expect(importResult.importedScenarioCount).toBe(1);
     expect(importResult.scenariosCount).toBeGreaterThan(1);
+    expect(importedProposal.schemaVersion).toBe(artifactSchemaVersion);
+    expect(scenariosArtifact.schemaVersion).toBe(artifactSchemaVersion);
     expect(
       importedProposal.scenarios.some(
         (scenario) =>
@@ -173,6 +180,7 @@ describe('generate workflow', () => {
       }
     );
     const scenariosArtifact = JSON.parse(await readFile(result.scenariosArtifactPath, 'utf8')) as {
+      schemaVersion: number;
       scenarios: Array<{ id: string; routePath: string }>;
     };
 
@@ -180,6 +188,7 @@ describe('generate workflow', () => {
     expect(result.scenarioSource).toBe('llm-fallback');
     expect(result.scenariosCount).toBe(1);
     expect(result.testFileCount).toBe(2);
+    expect(scenariosArtifact.schemaVersion).toBe(artifactSchemaVersion);
     expect(result.warnings).toEqual([
       'Detected a Vite React workspace but found no deterministic routes during generate. Spotter scanned component UX signals, but route-based scenarios require discoverable routes or an LLM fallback.',
       'Used mock (test-model) to infer scenarios because no deterministic routes were found.'
@@ -187,12 +196,132 @@ describe('generate workflow', () => {
     expect(scenariosArtifact.scenarios).toEqual([
       {
         id: 'catalog-empty-state',
+        origin: 'llm-fallback',
         name: 'Catalog Empty State',
         priority: 'low',
         routePath: '/catalog',
         tags: ['empty']
       }
     ]);
+  });
+
+  it('applies scenario overrides during deterministic generation', async () => {
+    const cwd = await copyFixture('fixture-next-ux');
+
+    await writeFile(
+      path.join(cwd, 'spotter.config.json'),
+      JSON.stringify(
+        {
+          overrides: {
+            scenarios: {
+              exclude: {
+                ids: ['products-default']
+              },
+              include: [
+                {
+                  id: 'products-empty-state-manual',
+                  routePath: '/products',
+                  name: 'Products Manual Empty State',
+                  priority: 'medium',
+                  tags: ['products', 'empty']
+                }
+              ]
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await runGenerateWorkflow({ cwd });
+    const scenariosArtifact = JSON.parse(await readFile(result.scenariosArtifactPath, 'utf8')) as {
+      schemaVersion: number;
+      scenarios: Array<{ id: string; origin?: string; routePath: string; name: string }>;
+    };
+
+    expect(result.scenarioSource).toBe('deterministic');
+    expect(scenariosArtifact.schemaVersion).toBe(artifactSchemaVersion);
+    expect(scenariosArtifact.scenarios.some((scenario) => scenario.id === 'products-default')).toBe(false);
+    expect(
+      scenariosArtifact.scenarios.some(
+        (scenario) =>
+          scenario.id === 'products-empty-state-manual' &&
+          scenario.origin === 'user-override' &&
+          scenario.routePath === '/products' &&
+          scenario.name === 'Products Manual Empty State'
+      )
+    ).toBe(true);
+  });
+
+  it('applies scenario overrides after importing reviewed suggestions', async () => {
+    const cwd = await copyFixture('fixture-next-ux');
+    const inputPath = path.join(cwd, 'manual-response.json');
+
+    await writeFile(
+      path.join(cwd, 'spotter.config.json'),
+      JSON.stringify(
+        {
+          overrides: {
+            scenarios: {
+              exclude: {
+                ids: ['products-feature-flag-state']
+              },
+              include: [
+                {
+                  id: 'products-empty-state-manual',
+                  routePath: '/products',
+                  name: 'Products Manual Empty State',
+                  priority: 'medium',
+                  tags: ['products', 'empty']
+                }
+              ]
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    await writeFile(
+      inputPath,
+      JSON.stringify(
+        {
+          provider: 'ide-manual',
+          model: 'copilot-chat',
+          scenarios: [
+            {
+              id: 'products-feature-flag-state',
+              routePath: '/products',
+              name: 'Products Feature Flag State',
+              priority: 'low',
+              tags: ['feature-flag']
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await runImportWorkflow({ cwd, inputPath });
+    const scenariosArtifact = JSON.parse(await readFile(result.scenariosArtifactPath, 'utf8')) as {
+      schemaVersion: number;
+      scenarios: Array<{ id: string; origin?: string; routePath: string; name: string }>;
+    };
+
+    expect(scenariosArtifact.schemaVersion).toBe(artifactSchemaVersion);
+    expect(scenariosArtifact.scenarios.some((scenario) => scenario.id === 'products-feature-flag-state')).toBe(false);
+    expect(
+      scenariosArtifact.scenarios.some(
+        (scenario) =>
+          scenario.id === 'products-empty-state-manual' &&
+          scenario.origin === 'user-override' &&
+          scenario.routePath === '/products' &&
+          scenario.name === 'Products Manual Empty State'
+      )
+    ).toBe(true);
   });
 
   it('builds generate workflow dependencies from config-based llm fallback settings', async () => {

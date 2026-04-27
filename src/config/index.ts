@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createJiti } from 'jiti';
 
 import type { LlmProviderName } from '../llm/provider.js';
-import type { LocaleDefinition, ViewportDefinition } from '../types.js';
+import type { LocaleDefinition, ScenarioDefinition, ViewportDefinition } from '../types.js';
 
 export interface SpotterDevServerConfig {
   command: string;
@@ -34,11 +34,25 @@ export interface SpotterLlmConfig {
   fallback: SpotterLlmFallbackConfig | null;
 }
 
+export interface SpotterScenarioExcludeConfig {
+  ids?: string[];
+  names?: string[];
+  routePaths?: string[];
+}
+
+export interface SpotterScenarioOverridesConfig {
+  exclude: SpotterScenarioExcludeConfig;
+  include: ScenarioDefinition[];
+}
+
 export interface SpotterConfig {
   appUrl: string;
   captureServer?: SpotterDevServerConfig | null;
   devServer: SpotterDevServerConfig | null;
   llm: SpotterLlmConfig;
+  overrides: {
+    scenarios: SpotterScenarioOverridesConfig;
+  };
   rootDir: string;
   viewports: ViewportDefinition[];
   locales: LocaleDefinition[];
@@ -59,11 +73,25 @@ export interface SpotterLlmConfigInput {
   fallback?: SpotterLlmFallbackConfigInput | null;
 }
 
+export interface SpotterScenarioExcludeConfigInput {
+  ids?: string[];
+  names?: string[];
+  routePaths?: string[];
+}
+
+export interface SpotterScenarioOverridesConfigInput {
+  exclude?: SpotterScenarioExcludeConfigInput;
+  include?: ScenarioDefinition[];
+}
+
 export interface SpotterConfigInput {
   appUrl?: string;
   captureServer?: Partial<SpotterDevServerConfig> | null;
   devServer?: Partial<SpotterDevServerConfig> | null;
   llm?: SpotterLlmConfigInput;
+  overrides?: {
+    scenarios?: SpotterScenarioOverridesConfigInput;
+  };
   rootDir?: string;
   viewports?: ViewportDefinition[];
   locales?: LocaleDefinition[];
@@ -87,6 +115,20 @@ export interface WriteStarterConfigOptions {
 export interface WrittenStarterConfig {
   config: SpotterConfig;
   configPath: string;
+}
+
+export interface WriteScenarioOverrideOptions {
+  cwd?: string;
+  excludeScenarioId?: string;
+  includeScenario?: ScenarioDefinition;
+}
+
+export interface WrittenScenarioOverride {
+  action: 'include' | 'exclude';
+  changed: boolean;
+  configPath: string;
+  createdConfig: boolean;
+  scenarioId: string;
 }
 
 export const defaultViewports: ViewportDefinition[] = [
@@ -120,6 +162,12 @@ export const defaultSpotterConfig: SpotterConfig = {
   llm: {
     fallback: null
   },
+  overrides: {
+    scenarios: {
+      exclude: {},
+      include: []
+    }
+  },
   rootDir: '.',
   viewports: defaultViewports,
   locales: defaultLocales,
@@ -135,14 +183,6 @@ export const supportedConfigFileNames = ['spotter.config.ts', 'spotter.config.js
 function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
   return {
     appUrl: config.appUrl,
-    captureServer:
-      config.captureServer === undefined
-        ? undefined
-        : config.captureServer
-          ? {
-              ...config.captureServer
-            }
-          : null,
     devServer: config.devServer
       ? {
           ...config.devServer
@@ -155,12 +195,29 @@ function cloneSpotterConfig(config: SpotterConfig): SpotterConfig {
           }
         : null
     },
+    overrides: {
+      scenarios: {
+        exclude: {
+          ...config.overrides.scenarios.exclude
+        },
+        include: config.overrides.scenarios.include.map((scenario) => ({ ...scenario }))
+      }
+    },
     rootDir: config.rootDir,
     viewports: config.viewports.map((viewport) => ({ ...viewport })),
     locales: config.locales.map((locale) => ({ ...locale })),
     paths: {
       ...config.paths
-    }
+    },
+    ...(config.captureServer === undefined
+      ? {}
+      : {
+          captureServer: config.captureServer
+            ? {
+                ...config.captureServer
+              }
+            : null
+        })
   };
 }
 
@@ -169,6 +226,15 @@ export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterC
   let captureServer: SpotterDevServerConfig | null | undefined = defaults.captureServer;
   let devServer: SpotterDevServerConfig | null = defaults.devServer;
   let llmFallback: SpotterLlmFallbackConfig | null = defaults.llm.fallback;
+  const scenarioOverrides: SpotterScenarioOverridesConfig = {
+    exclude: {
+      ...defaults.overrides.scenarios.exclude,
+      ...overrides.overrides?.scenarios?.exclude
+    },
+    include: (overrides.overrides?.scenarios?.include ?? defaults.overrides.scenarios.include).map((scenario) => ({
+      ...scenario
+    }))
+  };
 
   if (Object.hasOwn(overrides, 'captureServer')) {
     if (overrides.captureServer === null) {
@@ -257,6 +323,9 @@ export function mergeSpotterConfig(overrides: SpotterConfigInput = {}): SpotterC
     devServer,
     llm: {
       fallback: llmFallback
+    },
+    overrides: {
+      scenarios: scenarioOverrides
     },
     rootDir: overrides.rootDir ?? defaults.rootDir,
     viewports: overrides.viewports ?? defaults.viewports,
@@ -352,10 +421,128 @@ export async function writeStarterConfig(
   };
 }
 
+export async function writeScenarioOverride(
+  options: WriteScenarioOverrideOptions = {}
+): Promise<WrittenScenarioOverride> {
+  const cwd = options.cwd ?? process.cwd();
+  const existingConfigPath = await findSpotterConfigFile(cwd);
+
+  if (options.includeScenario && options.excludeScenarioId) {
+    throw new Error('Scenario override writes accept either an include scenario or an exclude scenario id, not both.');
+  }
+
+  if (!options.includeScenario && !options.excludeScenarioId) {
+    throw new Error('Scenario override writes require either includeScenario or excludeScenarioId.');
+  }
+
+  if (existingConfigPath && !existingConfigPath.endsWith('.json')) {
+    throw new Error(
+      `spotter override currently only supports JSON config files. Found ${existingConfigPath}. Update overrides.scenarios manually or switch to spotter.config.json.`
+    );
+  }
+
+  const configPath = existingConfigPath ?? path.join(cwd, 'spotter.config.json');
+  const createdConfig = existingConfigPath === null;
+  const configInput = createdConfig
+    ? (mergeSpotterConfig() as SpotterConfigInput)
+    : await loadJsonConfig(configPath);
+  const normalizedConfigInput = ensureScenarioOverrideConfigInput(configInput);
+  const previousContents = JSON.stringify(normalizedConfigInput, null, 2);
+
+  if (options.includeScenario) {
+    const includeScenario = normalizeScenarioOverrideScenario(options.includeScenario);
+    normalizedConfigInput.overrides!.scenarios!.include = upsertIncludedScenario(
+      normalizedConfigInput.overrides!.scenarios!.include ?? [],
+      includeScenario
+    );
+
+    const nextContents = JSON.stringify(normalizedConfigInput, null, 2);
+    const changed = previousContents !== nextContents;
+
+    if (changed) {
+      await mkdir(path.dirname(configPath), { recursive: true });
+      await writeFile(configPath, `${nextContents}\n`, 'utf8');
+    }
+
+    return {
+      action: 'include',
+      changed,
+      configPath,
+      createdConfig,
+      scenarioId: includeScenario.id
+    };
+  }
+
+  const excludeScenarioId = options.excludeScenarioId!.trim();
+  const existingExcludedIds = normalizedConfigInput.overrides!.scenarios!.exclude!.ids ?? [];
+  const nextExcludedIds = Array.from(new Set([...existingExcludedIds, excludeScenarioId])).sort((left, right) =>
+    left.localeCompare(right)
+  );
+  normalizedConfigInput.overrides!.scenarios!.exclude!.ids = nextExcludedIds;
+
+  const nextContents = JSON.stringify(normalizedConfigInput, null, 2);
+  const changed = previousContents !== nextContents;
+
+  if (changed) {
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(configPath, `${nextContents}\n`, 'utf8');
+  }
+
+  return {
+    action: 'exclude',
+    changed,
+    configPath,
+    createdConfig,
+    scenarioId: excludeScenarioId
+  };
+}
+
 export function resolveCaptureServerConfig(config: SpotterConfig): SpotterDevServerConfig | null {
   if (Object.hasOwn(config, 'captureServer')) {
     return config.captureServer ?? null;
   }
 
   return config.devServer;
+}
+
+function ensureScenarioOverrideConfigInput(config: SpotterConfigInput): SpotterConfigInput {
+  const normalizedConfig = config;
+
+  normalizedConfig.overrides ??= {};
+  normalizedConfig.overrides.scenarios ??= {};
+  normalizedConfig.overrides.scenarios.exclude ??= {};
+  normalizedConfig.overrides.scenarios.include ??= [];
+
+  return normalizedConfig;
+}
+
+function upsertIncludedScenario(
+  scenarios: ScenarioDefinition[],
+  nextScenario: ScenarioDefinition
+): ScenarioDefinition[] {
+  const nextIdKey = normalizeScenarioOverrideKey(nextScenario.id);
+  const nextRouteNameKey = `${normalizeScenarioOverrideKey(nextScenario.routePath)}::${normalizeScenarioOverrideKey(nextScenario.name)}`;
+  const keptScenarios = scenarios.filter((scenario) => {
+    const scenarioIdKey = normalizeScenarioOverrideKey(scenario.id);
+    const scenarioRouteNameKey = `${normalizeScenarioOverrideKey(scenario.routePath)}::${normalizeScenarioOverrideKey(scenario.name)}`;
+
+    return scenarioIdKey !== nextIdKey && scenarioRouteNameKey !== nextRouteNameKey;
+  });
+
+  return [...keptScenarios, nextScenario].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeScenarioOverrideScenario(scenario: ScenarioDefinition): ScenarioDefinition {
+  return {
+    id: scenario.id.trim(),
+    origin: 'user-override',
+    routePath: scenario.routePath.trim(),
+    name: scenario.name.trim(),
+    priority: scenario.priority,
+    tags: Array.from(new Set(scenario.tags.map((tag) => tag.trim()).filter(Boolean)))
+  };
+}
+
+function normalizeScenarioOverrideKey(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }

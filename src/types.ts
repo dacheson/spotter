@@ -14,6 +14,8 @@ export type FrameworkName =
 
 export type ScenarioPriority = 'high' | 'medium' | 'low';
 
+export type ManifestScenarioConfidence = ScenarioPriority | 'unknown';
+
 export interface ViewportDefinition {
   name: string;
   width: number;
@@ -43,8 +45,20 @@ export interface RouteDefinition {
 
 export interface ScenarioDefinition {
   id: string;
+  origin?: 'deterministic' | 'llm-fallback' | 'user-override';
   routePath: string;
   name: string;
   priority: ScenarioPriority;
   tags: string[];
+}
+
+export interface ManifestSummaryScenario {
+  confidence: ManifestScenarioConfidence;
+  correctionHint: string;
+  executionScope: string;
+  provenance: string[];
+  routePath: string;
+  scenarioId: string;
+  scenarioName: string;
+  whyIncluded: string;
 }

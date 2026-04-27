@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { scanWorkspace } from '../src/index.js';
+import { artifactSchemaVersion, scanWorkspace } from '../src/index.js';
 
 const tempDirectories: string[] = [];
 
@@ -41,11 +41,12 @@ describe('workspace scan', () => {
     );
 
     const result = await scanWorkspace({ cwd });
-    const signals = JSON.parse(await readFile(result.signalsPath, 'utf8')) as { findings: Array<{ kind: string }> };
-    const heuristics = JSON.parse(await readFile(result.heuristicsPath, 'utf8')) as { counts: Record<string, number> };
+    const signals = JSON.parse(await readFile(result.signalsPath, 'utf8')) as { findings: Array<{ kind: string }>; schemaVersion: number };
+    const heuristics = JSON.parse(await readFile(result.heuristicsPath, 'utf8')) as { counts: Record<string, number>; schemaVersion: number };
     const summary = JSON.parse(await readFile(result.summaryPath, 'utf8')) as {
       framework: string;
       routeCount: number;
+      schemaVersion: number;
       signalCount: number;
     };
 
@@ -58,6 +59,7 @@ describe('workspace scan', () => {
       }
     ]);
     expect(signals.findings.map((finding) => finding.kind)).toEqual(['loading', 'form']);
+    expect(signals.schemaVersion).toBe(artifactSchemaVersion);
     expect(heuristics.counts).toEqual({
       loading: 1,
       error: 0,
@@ -67,8 +69,10 @@ describe('workspace scan', () => {
       responsive: 0,
       locale: 0
     });
+    expect(heuristics.schemaVersion).toBe(artifactSchemaVersion);
     expect(summary.routeCount).toBe(1);
     expect(summary.signalCount).toBe(2);
     expect(summary.framework).toBe('next-app');
+    expect(summary.schemaVersion).toBe(artifactSchemaVersion);
   });
 });

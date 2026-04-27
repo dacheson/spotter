@@ -37,6 +37,12 @@ describe('config loader', () => {
     expect(loaded.config.llm).toEqual({
       fallback: null
     });
+    expect(loaded.config.overrides).toEqual({
+      scenarios: {
+        exclude: {},
+        include: []
+      }
+    });
     expect(loaded.config.paths).toEqual({
       artifactsDir: '.spotter/artifacts',
       screenshotsDir: '.spotter/baselines',
@@ -77,6 +83,22 @@ describe('config loader', () => {
               baseUrl: 'http://127.0.0.1:11434/v1'
             }
           },
+          overrides: {
+            scenarios: {
+              exclude: {
+                ids: ['checkout-loading-state']
+              },
+              include: [
+                {
+                  id: 'checkout-empty-state-manual',
+                  routePath: '/checkout',
+                  name: 'Checkout Empty State Manual',
+                  priority: 'medium',
+                  tags: ['empty']
+                }
+              ]
+            }
+          },
           paths: {
             screenshotsDir: 'artifacts/screenshots'
           },
@@ -107,6 +129,22 @@ describe('config loader', () => {
         provider: 'local',
         model: 'llama3.1',
         baseUrl: 'http://127.0.0.1:11434/v1'
+      }
+    });
+    expect(loaded.config.overrides).toEqual({
+      scenarios: {
+        exclude: {
+          ids: ['checkout-loading-state']
+        },
+        include: [
+          {
+            id: 'checkout-empty-state-manual',
+            routePath: '/checkout',
+            name: 'Checkout Empty State Manual',
+            priority: 'medium',
+            tags: ['empty']
+          }
+        ]
       }
     });
     expect(loaded.config.paths).toEqual({
@@ -229,6 +267,57 @@ describe('config loader', () => {
       command: 'npm run dev',
       reuseExistingServer: true,
       timeoutMs: 120000
+    });
+  });
+
+  it('loads scenario overrides from config', async () => {
+    const cwd = await createTempDir();
+    const configPath = path.join(cwd, 'spotter.config.json');
+
+    await writeFile(
+      configPath,
+      JSON.stringify(
+        {
+          overrides: {
+            scenarios: {
+              exclude: {
+                routePaths: ['/checkout']
+              },
+              include: [
+                {
+                  id: 'custom-checkout-empty',
+                  routePath: '/checkout',
+                  name: 'Checkout Empty',
+                  priority: 'high',
+                  tags: ['checkout', 'empty']
+                }
+              ]
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const loaded = await loadSpotterConfig({ cwd });
+
+    expect(loaded.configPath).toBe(configPath);
+    expect(loaded.config.overrides).toEqual({
+      scenarios: {
+        exclude: {
+          routePaths: ['/checkout']
+        },
+        include: [
+          {
+            id: 'custom-checkout-empty',
+            routePath: '/checkout',
+            name: 'Checkout Empty',
+            priority: 'high',
+            tags: ['checkout', 'empty']
+          }
+        ]
+      }
     });
   });
 });

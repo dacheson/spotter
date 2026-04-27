@@ -157,13 +157,19 @@ function pushUniqueScenario(
 }
 
 function normalizeScenario(scenario: ScenarioDefinition): ScenarioDefinition {
-  return {
+  const normalizedScenario: ScenarioDefinition = {
     id: scenario.id.trim(),
     routePath: scenario.routePath.trim(),
     name: scenario.name.trim(),
     priority: scenario.priority,
     tags: Array.from(new Set(scenario.tags.map((tag) => tag.trim()).filter(Boolean)))
   };
+
+  if (scenario.origin) {
+    normalizedScenario.origin = scenario.origin;
+  }
+
+  return normalizedScenario;
 }
 
 function createIdKey(id: string): string {

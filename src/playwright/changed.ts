@@ -5,6 +5,8 @@ import { loadSpotterConfig, resolveCaptureServerConfig } from '../config/index.j
 import type { SpotterDevServerConfig } from '../config/index.js';
 import { collectDiffSummary, type DiffSummary } from '../diff/index.js';
 import { writeArtifactRecord } from '../reports/index.js';
+import type { ChangedScenarioSelection, ChangedSelectionSummary } from '../reports/artifacts.js';
+import { selectChangedScenarios } from './impact.js';
 import {
   createBaselinePlaywrightConfigContents,
   type BaselineCommandRunRequest,
@@ -19,6 +21,7 @@ export interface ChangedCommandOptions {
 
 export interface ChangedCommandDependencies {
   runner?: BaselineCommandRunner;
+  selectScenarios?: (options: { cwd: string }) => Promise<ChangedScenarioSelection>;
 }
 
 export interface ChangedCommandResult {
@@ -34,6 +37,8 @@ export interface ChangedCommandResult {
   exitCode: number;
   failureMessage?: string;
   passed: boolean;
+  selection?: ChangedScenarioSelection;
+  selectionSummary?: ChangedSelectionSummary;
   summary: DiffSummary;
 }
 
@@ -65,15 +70,38 @@ export async function runChangedCommand(
   );
 
   const externalCommand = createNpxCommand(['playwright', 'test', '--config', configPath]);
+  const selectScenarios = dependencies.selectScenarios ?? ((selectionOptions: { cwd: string }) => selectChangedScenarios(selectionOptions));
+  const selection = await selectScenarios({ cwd });
   const command = externalCommand.command;
-  const args = externalCommand.args;
+  const args = [...externalCommand.args];
+  const selectedScenarioIds = Array.from(
+    new Set([
+      ...selection.trustedScenarios.map((scenario) => scenario.scenarioId),
+      ...selection.possibleAdditionalImpact.map((scenario) => scenario.scenarioId)
+    ])
+  );
+  const selectionSummary = createChangedSelectionSummary(selection, selectedScenarioIds.length);
+
+  if (selection.mode === 'impact' && selectedScenarioIds.length > 0) {
+    args.push('--grep', createScenarioGrepPattern(selectedScenarioIds));
+  }
+
   const runner = dependencies.runner ?? runExternalCommand;
-  const runResult = await runner({ command, args, cwd });
-  const summary = await collectDiffSummary(resultsDir);
-  const completed = runResult.exitCode === 0 || summary.changed > 0;
-  const failureMessage = completed
+  const shouldRunPlaywright = selection.mode !== 'none';
+  const runResult = shouldRunPlaywright ? await runner({ command, args, cwd }) : { exitCode: 0 };
+  const summary = shouldRunPlaywright
+    ? await collectDiffSummary(resultsDir)
+    : {
+        changed: 0,
+        unchanged: 0,
+        artifacts: []
+      };
+  const completed = selection.mode === 'none' ? true : runResult.exitCode === 0 || summary.changed > 0;
+  const failureMessage = selection.mode === 'none'
     ? undefined
-    : `Playwright changed run failed before visual comparison completed (exit code ${runResult.exitCode}).`;
+    : completed
+      ? undefined
+      : `Playwright changed run failed before visual comparison completed (exit code ${runResult.exitCode}).`;
   const artifact = await writeArtifactRecord(
     {
       kind: 'changed',
@@ -86,9 +114,11 @@ export async function runChangedCommand(
       args,
       completed,
       exitCode: runResult.exitCode,
-      failureMessage,
       passed: runResult.exitCode === 0,
-      summary
+      summary,
+      ...(selection ? { selection } : {}),
+      ...(selectionSummary ? { selectionSummary } : {}),
+      ...(failureMessage ? { failureMessage } : {})
     },
     { cwd }
   );
@@ -104,10 +134,37 @@ export async function runChangedCommand(
     args,
     completed,
     exitCode: runResult.exitCode,
-    failureMessage,
     passed: runResult.exitCode === 0,
-    summary
+    summary,
+    ...(selection ? { selection } : {}),
+    ...(selectionSummary ? { selectionSummary } : {}),
+    ...(failureMessage ? { failureMessage } : {})
   };
+}
+
+function createChangedSelectionSummary(
+  selection: ChangedScenarioSelection | undefined,
+  selectedScenarioCount: number
+): ChangedSelectionSummary | undefined {
+  if (!selection) {
+    return undefined;
+  }
+
+  return {
+    changedFileCount: selection.changedFiles.length,
+    mode: selection.mode,
+    possibleAdditionalImpactCount: selection.possibleAdditionalImpact.length,
+    selectedScenarioCount,
+    trustedScenarioCount: selection.trustedScenarios.length
+  };
+}
+
+function createScenarioGrepPattern(scenarioIds: string[]): string {
+  return scenarioIds.map((scenarioId) => escapeRegex(scenarioId)).join('|');
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function createChangedPlaywrightConfigContents(paths: {

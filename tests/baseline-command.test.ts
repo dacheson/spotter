@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBaselinePlaywrightConfigContents, createDefaultCliHandlers, runBaselineCommand } from '../src/index.js';
+import { artifactSchemaVersion, createBaselinePlaywrightConfigContents, createDefaultCliHandlers, runBaselineCommand } from '../src/index.js';
 
 function expectedRunnerInvocation(configPath: string, cwd: string) {
   if (process.platform === 'win32') {
@@ -108,6 +108,7 @@ describe('baseline command', () => {
     expect(configContents).toContain('timeout: 90000');
     expect(JSON.parse(artifactContents)).toMatchObject({
       kind: 'baseline',
+      schemaVersion: artifactSchemaVersion,
       baselineDir: path.resolve(cwd, '.generated/baselines')
     });
     expect(runner).toHaveBeenCalledWith(expectedRunnerInvocation(result.configPath, cwd));

@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeVersionedJsonArtifact } from '../artifacts/versioned.js';
 import { loadSpotterConfig } from '../config/index.js';
 import { detectRoutesWithAdapters } from './adapters.js';
 
@@ -48,7 +49,7 @@ export async function writeRouteManifest(
     options.outputPath ?? path.resolve(cwd, config.paths.artifactsDir, 'route-manifest.json');
 
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  await writeVersionedJsonArtifact(outputPath, manifest);
 
   return {
     manifest,

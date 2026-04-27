@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { writeArtifactRecord } from '../src/index.js';
+import { artifactSchemaVersion, writeArtifactRecord } from '../src/index.js';
 
 const tempDirectories: string[] = [];
 
@@ -25,12 +25,13 @@ describe('artifact storage', () => {
     const written = await writeArtifactRecord(
       {
         kind: 'baseline',
-        generatedAt: '2026-04-19T12:00:00.000Z',
         baselineDir: 'C:/repo/.spotter/baselines',
         configPath: 'C:/repo/.spotter/artifacts/playwright.baseline.config.mjs',
         testDir: 'C:/repo/.spotter/tests',
         command: 'npx',
-        args: ['playwright', 'test', '--config', 'config', '--update-snapshots']
+        args: ['playwright', 'test', '--config', 'config', '--update-snapshots'],
+        generatedAt: '2026-04-19T12:00:00.000Z',
+        schemaVersion: artifactSchemaVersion
       },
       { cwd }
     );

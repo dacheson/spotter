@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createRouteManifest, writeRouteManifest } from '../src/index.js';
+import { artifactSchemaVersion, createRouteManifest, writeRouteManifest } from '../src/index.js';
 
 const tempDirectories: string[] = [];
 
@@ -95,6 +95,7 @@ describe('route manifest', () => {
     expect(JSON.parse(fileContents)).toEqual({
       framework: 'next-app',
       rootDir: '.',
+      schemaVersion: artifactSchemaVersion,
       routes: [
         {
           path: '/',
@@ -119,6 +120,7 @@ describe('route manifest', () => {
     expect(JSON.parse(fileContents)).toEqual({
       framework: 'next-app',
       rootDir: '.',
+      schemaVersion: artifactSchemaVersion,
       routes: [
         {
           path: '/docs',

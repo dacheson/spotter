@@ -12,9 +12,12 @@ import {
   createGenerateWorkflowDependencies,
   type GenerateCommandOptions,
   type ImportWorkflowResult,
+  type OverrideCommandOptions,
+  type OverrideWorkflowResult,
   runImportWorkflow,
   runGenerateWorkflow,
   runInitWorkflow,
+  runOverrideWorkflow,
   runPromptWorkflow,
   runReportWorkflow,
   runScanWorkflow,
@@ -43,6 +46,7 @@ export interface CliActionContext {
   environment: CliEnvironment;
   generateOptions?: GenerateCommandOptions;
   importOptions?: ImportCommandOptions;
+  overrideOptions?: OverrideCommandOptions;
 }
 
 export interface CliCommandHandler {
@@ -65,6 +69,7 @@ export interface CreateDefaultCliHandlersOptions {
   write?: (message: string) => void;
   runBaseline?: (options: { cwd: string }) => Promise<BaselineCommandResult>;
   runChanged?: (options: { cwd: string }) => Promise<ChangedCommandResult>;
+  runOverride?: (options: { cwd: string; override: OverrideCommandOptions }) => Promise<OverrideWorkflowResult>;
   runReport?: (options: { cwd: string }) => Promise<ReportWorkflowResult>;
   runScan?: (options: { cwd: string }) => Promise<ScanWorkflowResult>;
 }
@@ -89,6 +94,10 @@ export const cliCommandDefinitions: CliCommandDefinition[] = [
   {
     name: 'import',
     description: 'Import manual IDE scenario suggestions and regenerate coverage artifacts.'
+  },
+  {
+    name: 'override',
+    description: 'Write a durable scenario include or exclude correction into spotter.config.json.'
   },
   {
     name: 'baseline',
@@ -135,12 +144,15 @@ export function createDefaultCliHandlers(
   const runPrompt = options.runPrompt ?? ((promptOptions: { cwd: string }) => runPromptWorkflow(promptOptions));
   const runBaseline = options.runBaseline ?? ((baselineOptions: { cwd: string }) => runBaselineCommand(baselineOptions));
   const runChanged = options.runChanged ?? ((changedOptions: { cwd: string }) => runChangedCommand(changedOptions));
+  const runOverride =
+    options.runOverride ??
+    ((overrideOptions: { cwd: string; override: OverrideCommandOptions }) => runOverrideWorkflow(overrideOptions));
   const runReport = options.runReport ?? ((reportOptions: { cwd: string }) => runReportWorkflow(reportOptions));
 
   return Object.fromEntries(
     cliCommandDefinitions.map((command) => [
       command.name,
-      async ({ commandName, environment, generateOptions, importOptions }) => {
+      async ({ commandName, environment, generateOptions, importOptions, overrideOptions }) => {
         if (commandName === 'init') {
           const result = await runInit({ cwd: environment.cwd });
           write(`Starter config written to ${result.configPath}`);
@@ -224,6 +236,31 @@ export function createDefaultCliHandlers(
           return;
         }
 
+        if (commandName === 'override') {
+          if (!overrideOptions) {
+            throw new Error(
+              'spotter override requires either --exclude-id <id> or --include-id <id> --route <path> --name <name> --priority <priority>.'
+            );
+          }
+
+          const result = await runOverride({ cwd: environment.cwd, override: overrideOptions });
+          const actionLabel = result.action === 'include' ? 'include' : 'exclude';
+
+          if (result.changed) {
+            write(`Scenario ${actionLabel} override recorded for ${result.scenarioId}.`);
+          } else {
+            write(`Scenario ${actionLabel} override already matched ${result.scenarioId}.`);
+          }
+
+          if (result.createdConfig) {
+            write(`Created Spotter config at ${result.configPath}`);
+          } else {
+            write(`Updated Spotter config at ${result.configPath}`);
+          }
+
+          return;
+        }
+
         if (commandName === 'baseline') {
           const result = await runBaseline({ cwd: environment.cwd });
           write(`Baseline screenshots stored in ${result.baselineDir}`);
@@ -238,6 +275,12 @@ export function createDefaultCliHandlers(
             write(`Changed run ${result.passed ? 'passed' : 'failed'} with ${result.summary.changed} changed screenshots.`);
           } else {
             write(result.failureMessage ?? `Changed run failed before visual comparison completed (exit code ${result.exitCode}).`);
+          }
+
+          if ((result.selection?.possibleAdditionalImpact.length ?? 0) > 0) {
+            write(
+              `Possible additional impact: ${result.selection!.possibleAdditionalImpact.length} low-confidence scenarios require review in spotter report.`
+            );
           }
 
           write(`Changed artifact written to ${result.artifactPath}`);
@@ -299,9 +342,17 @@ export function createProgram(dependencies: CliDependencies): Command {
         .option('--llm-max-generated-scenarios <count>', 'Cap how many fallback scenarios Spotter accepts.', parseIntegerOption);
     } else if (command.name === 'import') {
       registeredCommand.requiredOption('--input <path>', 'Path to a JSON response generated from spotter prompt.');
+    } else if (command.name === 'override') {
+      registeredCommand
+        .option('--exclude-id <id>', 'Exclude a generated scenario by scenario id.')
+        .option('--include-id <id>', 'Include a hand-authored scenario by scenario id.')
+        .option('--route <path>', 'Route path for an included scenario.')
+        .option('--name <name>', 'Human-readable name for an included scenario.')
+        .option('--priority <priority>', 'Priority for an included scenario: high, medium, or low.')
+        .option('--tag <tag>', 'Tag to add to an included scenario.', collectStringOption, [] as string[]);
     }
 
-    registeredCommand.action(async (commandOptions?: GenerateCommandOptions & { input?: string }) => {
+    registeredCommand.action(async (commandOptions?: GenerateCommandOptions & { excludeId?: string; includeId?: string; input?: string; name?: string; priority?: string; route?: string; tag?: string[] }) => {
       const handler = dependencies.handlers[command.name];
 
       if (!handler) {
@@ -324,6 +375,21 @@ export function createProgram(dependencies: CliDependencies): Command {
 
         if (normalizedOptions !== undefined) {
           actionContext.importOptions = normalizedOptions;
+        }
+      } else if (command.name === 'override') {
+        const normalizedOptions = normalizeOverrideOptions(
+          commandOptions as {
+            excludeId?: string;
+            includeId?: string;
+            name?: string;
+            priority?: string;
+            route?: string;
+            tag?: string[];
+          } | undefined
+        );
+
+        if (normalizedOptions !== undefined) {
+          actionContext.overrideOptions = normalizedOptions;
         }
       }
 
@@ -400,4 +466,65 @@ function parseIntegerOption(value: string): number {
   }
 
   return parsedValue;
+}
+
+function normalizeOverrideOptions(
+  commandOptions:
+    | {
+        excludeId?: string;
+        includeId?: string;
+        name?: string;
+        priority?: string;
+        route?: string;
+        tag?: string[];
+      }
+    | undefined
+): OverrideCommandOptions | undefined {
+  if (!commandOptions) {
+    return undefined;
+  }
+
+  if (commandOptions.excludeId) {
+    if (commandOptions.includeId || commandOptions.route || commandOptions.name || commandOptions.priority || (commandOptions.tag?.length ?? 0) > 0) {
+      throw new Error('spotter override exclude mode only accepts --exclude-id <id>.');
+    }
+
+    return {
+      action: 'exclude',
+      scenarioId: commandOptions.excludeId
+    };
+  }
+
+  if (!commandOptions.includeId) {
+    return undefined;
+  }
+
+  if (!commandOptions.route || !commandOptions.name || !commandOptions.priority) {
+    throw new Error(
+      'spotter override include mode requires --include-id <id> --route <path> --name <name> --priority <priority>.'
+    );
+  }
+
+  return {
+    action: 'include',
+    scenario: {
+      id: commandOptions.includeId,
+      routePath: commandOptions.route,
+      name: commandOptions.name,
+      priority: parseScenarioPriorityOption(commandOptions.priority),
+      tags: commandOptions.tag ?? []
+    }
+  };
+}
+
+function parseScenarioPriorityOption(value: string): import('../types.js').ScenarioPriority {
+  if (value === 'high' || value === 'medium' || value === 'low') {
+    return value;
+  }
+
+  throw new Error(`Expected a scenario priority of high, medium, or low. Received: ${value}`);
+}
+
+function collectStringOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }

@@ -20,6 +20,9 @@ describe('project structure', () => {
       'init',
       'scan',
       'generate',
+      'prompt',
+      'import',
+      'override',
       'baseline',
       'changed',
       'report'

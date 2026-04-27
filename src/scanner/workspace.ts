@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeVersionedJsonArtifact } from '../artifacts/versioned.js';
 import { loadSpotterConfig } from '../config/index.js';
 
 import { deriveComponentStateHeuristics, type ComponentStateHeuristicSummary } from './heuristics.js';
@@ -59,5 +60,5 @@ export async function scanWorkspace(options: ScanWorkspaceOptions = {}): Promise
 }
 
 async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await writeVersionedJsonArtifact(filePath, value as object);
 }

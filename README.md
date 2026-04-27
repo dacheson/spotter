@@ -95,6 +95,7 @@ npx spotter init
 npx spotter scan
 npx spotter prompt
 npx spotter import --input .spotter/artifacts/manual-response.json
+npx spotter override --exclude-id checkout-loading-state
 npx spotter generate
 npx spotter baseline
 npx spotter changed
@@ -108,6 +109,7 @@ spotter init
 spotter scan
 spotter prompt
 spotter import --input .spotter/artifacts/manual-response.json
+spotter override --exclude-id checkout-loading-state
 spotter generate
 spotter baseline
 spotter changed
@@ -122,8 +124,9 @@ What a regular developer does:
 4. Run `spotter prompt` when you want a copy-pasteable IDE prompt for manual scenario suggestions.
 5. Paste the prompt into your IDE agent and save its JSON response.
 6. Run `spotter import --input <path>` to merge reviewed suggestions and regenerate tests.
-7. Run `spotter baseline` to capture snapshot baselines.
-8. After code changes, run `spotter changed` and then `spotter report`.
+7. Run `spotter override ...` when you need a quick durable include or exclude correction written into config.
+8. Run `spotter baseline` to capture snapshot baselines.
+9. After code changes, run `spotter changed` and then `spotter report`.
 
 The CLI now supports starter config generation, deterministic repository scanning, deterministic Playwright test generation, baseline capture, changed-run comparison, and artifact-backed reporting.
 
@@ -172,6 +175,8 @@ That generated Playwright config now also injects `use.baseURL` from `appUrl` an
 
 `spotter changed` reruns the generated tests against those baselines and reports any changed image paths found in the Playwright results output.
 
+When a changed file maps cleanly to a known route, Spotter narrows the run to trusted impacted scenarios. When a shared component change is only partially attributable, Spotter now records a bounded `Possible Additional Impact` set in the manifest summary instead of immediately falling back to a full generated-suite run.
+
 Both commands also persist their latest run metadata as JSON artifacts in the configured `artifactsDir`.
 
 The scanner can now walk TS, TSX, JS, JSX, and Vue single-file components and extract deterministic state signals such as loading, error, empty, modal, form, auth, and role checks.
@@ -190,6 +195,15 @@ The `prompt` command writes a manual-assist prompt and a structured context arti
 
 The `import` command reads a reviewed JSON response from that prompt flow, validates it against Spotter's scenario schema, merges it with deterministic scenarios, reprioritizes the combined set, and regenerates the scenario artifacts and Playwright tests.
 
+Scenario correction is config-first. `overrides.scenarios.exclude` removes known-noisy scenarios by `id`, `name`, or `routePath`, and `overrides.scenarios.include` adds durable hand-authored scenarios that Spotter should keep generating in future runs.
+
+The `override` command is a convenience layer on top of that config. Today it supports the common fast-fix paths:
+
+* `spotter override --exclude-id <scenario-id>`
+* `spotter override --include-id <scenario-id> --route <path> --name <label> --priority <high|medium|low> --tag <tag>`
+
+`spotter override` currently writes JSON config files only. If your repo uses `spotter.config.ts`, Spotter will stop and ask you to make the equivalent edit manually so the correction remains explicit.
+
 If deterministic route discovery returns no routes, the default generate flow now says that clearly. Users can now enable an LLM fallback through `spotter.config.*` or per-run `spotter generate` flags so Spotter can infer scenarios from scanned UX signals when deterministic adapters are insufficient.
 
 The LLM layer now exposes a provider abstraction with a deterministic mock provider and an invoker-based adapter surface for OpenAI-compatible remote or local model integrations.
@@ -200,7 +214,9 @@ The scenario enhancer now routes the validated merged scenario set back through 
 
 The `generate` command now accepts `--llm-fallback`, `--llm-provider`, `--llm-model`, `--llm-base-url`, `--llm-api-key-env`, `--llm-instructions`, and `--llm-max-generated-scenarios` so teams can opt into fallback inference without changing code.
 
-The `report` command reads the latest changed-run artifact and the generated scenario inventory to summarize diffs by priority, then writes a Markdown report to `artifactsDir/visual-report.md` by default.
+The `report` command reads the latest changed-run artifact, generated scenario inventory, and scenario plan to render a manifest-first summary of trusted scenarios before the raw diff list, then writes a Markdown report to `artifactsDir/visual-report.md` by default.
+
+That manifest summary can now separate fully trusted route matches from lower-confidence `Possible Additional Impact` scenarios caused by shared component changes, while still keeping the execution set bounded and reviewable.
 
 ## Generated Output
 
@@ -232,6 +248,16 @@ Spotter writes its working output into the repository so it can be reviewed in g
 	"llm": {
 		"fallback": null
 	},
+	"overrides": {
+		"scenarios": {
+			"exclude": {
+				"ids": [],
+				"names": [],
+				"routePaths": []
+			},
+			"include": []
+		}
+	},
 	"rootDir": ".",
 	"locales": [
 		{
@@ -258,6 +284,36 @@ Spotter writes its working output into the repository so it can be reviewed in g
 		"testsDir": ".spotter/tests"
 	}
 }
+```
+
+Example override:
+
+```json
+{
+	"overrides": {
+		"scenarios": {
+			"exclude": {
+				"ids": ["checkout-loading-state"]
+			},
+			"include": [
+				{
+					"id": "checkout-empty-state-manual",
+					"routePath": "/checkout",
+					"name": "Checkout Empty State",
+					"priority": "medium",
+					"tags": ["checkout", "empty"]
+				}
+			]
+		}
+	}
+}
+```
+
+Equivalent CLI examples:
+
+```bash
+spotter override --exclude-id checkout-loading-state
+spotter override --include-id checkout-empty-state-manual --route /checkout --name "Checkout Empty State" --priority medium --tag checkout --tag empty
 ```
 
 If you want Spotter to assume the app is already running, disable automatic startup:

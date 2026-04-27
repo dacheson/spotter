@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { writeVersionedJsonArtifact } from '../artifacts/versioned.js';
 import {
   loadSpotterConfig,
   type SpotterLlmFallbackConfig,
+  writeScenarioOverride,
   writeStarterConfig
 } from '../config/index.js';
 import {
@@ -16,6 +18,7 @@ import {
 import { normalizeLlmEnhancementProposal, validateLlmEnhancementProposal } from '../llm/index.js';
 import { renderVisualReportSummary, writeVisualReportMarkdown } from '../reports/index.js';
 import {
+  applyScenarioOverrides,
   createConfiguredScenarioPlan,
   generateDeterministicScenarios,
   prioritizeScenarios,
@@ -62,6 +65,14 @@ export interface ReportWorkflowResult {
   markdownPath: string;
 }
 
+export interface OverrideWorkflowResult {
+  action: 'include' | 'exclude';
+  changed: boolean;
+  configPath: string;
+  createdConfig: boolean;
+  scenarioId: string;
+}
+
 export interface PromptWorkflowResult {
   contextPath: string;
   framework: FrameworkName;
@@ -105,6 +116,16 @@ export interface GenerateCommandOptions {
   llmProvider?: LlmProviderName;
 }
 
+export type OverrideCommandOptions =
+  | {
+      action: 'exclude';
+      scenarioId: string;
+    }
+  | {
+      action: 'include';
+      scenario: ScenarioDefinition;
+    };
+
 export async function runInitWorkflow(environment: WorkflowEnvironment): Promise<InitWorkflowResult> {
   const result = await writeStarterConfig({ cwd: environment.cwd });
 
@@ -133,6 +154,7 @@ export async function runGenerateWorkflow(
   dependencies: GenerateWorkflowDependencies = {}
 ): Promise<GenerateWorkflowResult> {
   const scanResult = await scanWorkspace({ cwd: environment.cwd });
+  const { config } = await loadSpotterConfig({ cwd: environment.cwd });
   const heuristicsByRoute = mapHeuristicsToRoutes(scanResult.routeManifest.routes, scanResult.heuristics.heuristics);
   const signalKindsByRoute = mapSignalKindsToRoutes(scanResult.routeManifest.routes, scanResult.signals.findings);
   let scenarios = generateDeterministicScenarios({
@@ -162,7 +184,10 @@ export async function runGenerateWorkflow(
     const enhanced = await enhanceScenarios(enhancementInput);
 
     if (enhanced.proposal.scenarios.length > 0) {
-      scenarios = enhanced.proposal.scenarios;
+      scenarios = enhanced.proposal.scenarios.map((scenario) => ({
+        ...scenario,
+        origin: scenario.origin ?? 'llm-fallback'
+      }));
       scenarioSource = 'llm-fallback';
       warnings.push(
         `Used ${formatLlmProviderLabel(dependencies.llmProvider)} to infer scenarios because no deterministic routes were found.`
@@ -170,9 +195,10 @@ export async function runGenerateWorkflow(
     }
   }
 
+  scenarios = applyScenarioOverrides(scenarios, config.overrides.scenarios);
+
   const scenarioPlan = await createConfiguredScenarioPlan(scenarios, { cwd: environment.cwd });
   const writtenTests = await writeGeneratedPlaywrightTests(scenarioPlan, { cwd: environment.cwd });
-  const { config } = await loadSpotterConfig({ cwd: environment.cwd });
   const artifactsDir = path.resolve(environment.cwd, config.paths.artifactsDir);
   const scenariosArtifactPath = path.join(artifactsDir, 'scenarios.json');
   const planArtifactPath = path.join(artifactsDir, 'scenario-plan.json');
@@ -277,7 +303,8 @@ export async function runImportWorkflow(options: ImportWorkflowOptions): Promise
     routesByPath,
     signalKindsByRoute: scenarioContext.signalKindsByRoute
   }).sort((left, right) => left.id.localeCompare(right.id));
-  const scenarioPlan = await createConfiguredScenarioPlan(scenarios, { cwd: options.cwd });
+  const overriddenScenarios = applyScenarioOverrides(scenarios, config.overrides.scenarios);
+  const scenarioPlan = await createConfiguredScenarioPlan(overriddenScenarios, { cwd: options.cwd });
   const writtenTests = await writeGeneratedPlaywrightTests(scenarioPlan, { cwd: options.cwd });
 
   await mkdir(artifactsDir, { recursive: true });
@@ -285,19 +312,19 @@ export async function runImportWorkflow(options: ImportWorkflowOptions): Promise
     writeJsonFile(proposalArtifactPath, mergedProposal),
     writeJsonFile(scenariosArtifactPath, {
       generatedAt: scenarioPlan.generatedAt,
-      scenarios
+      scenarios: overriddenScenarios
     }),
     writeJsonFile(planArtifactPath, scenarioPlan)
   ]);
 
   return {
     framework: scenarioContext.scanResult.routeManifest.framework,
-    importedScenarioCount: Math.max(0, scenarios.length - scenarioContext.existingScenarios.length),
+    importedScenarioCount: Math.max(0, overriddenScenarios.length - scenarioContext.existingScenarios.length),
     outputDir: writtenTests.outputDir,
     planArtifactPath,
     proposalArtifactPath,
     scenariosArtifactPath,
-    scenariosCount: scenarios.length,
+    scenariosCount: overriddenScenarios.length,
     testFileCount: writtenTests.files.length,
     warnings: scenarioContext.warnings
   };
@@ -313,8 +340,28 @@ export async function runReportWorkflow(environment: WorkflowEnvironment): Promi
   };
 }
 
+export async function runOverrideWorkflow(options: {
+  cwd: string;
+  override: OverrideCommandOptions;
+}): Promise<OverrideWorkflowResult> {
+  const result = await writeScenarioOverride({
+    cwd: options.cwd,
+    ...(options.override.action === 'exclude'
+      ? { excludeScenarioId: options.override.scenarioId }
+      : { includeScenario: options.override.scenario })
+  });
+
+  return {
+    action: result.action,
+    changed: result.changed,
+    configPath: result.configPath,
+    createdConfig: result.createdConfig,
+    scenarioId: result.scenarioId
+  };
+}
+
 async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await writeVersionedJsonArtifact(filePath, value as object);
 }
 
 async function readJsonFile(filePath: string): Promise<unknown> {
@@ -333,13 +380,17 @@ async function collectScenarioContext(
   warnings: string[];
 }> {
   const scanResult = await scanWorkspace({ cwd });
+  const { config } = await loadSpotterConfig({ cwd });
   const heuristicsByRoute = mapHeuristicsToRoutes(scanResult.routeManifest.routes, scanResult.heuristics.heuristics);
   const signalKindsByRoute = mapSignalKindsToRoutes(scanResult.routeManifest.routes, scanResult.signals.findings);
-  const existingScenarios = generateDeterministicScenarios({
-    heuristicsByRoute,
-    routes: scanResult.routeManifest.routes,
-    signalKindsByRoute
-  });
+  const existingScenarios = applyScenarioOverrides(
+    generateDeterministicScenarios({
+      heuristicsByRoute,
+      routes: scanResult.routeManifest.routes,
+      signalKindsByRoute
+    }),
+    config.overrides.scenarios
+  );
 
   return {
     existingScenarios,

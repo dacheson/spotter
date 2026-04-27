@@ -1,13 +1,35 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { stampArtifactSchemaVersion } from '../artifacts/versioned.js';
+export { artifactSchemaVersion } from '../artifacts/versioned.js';
 import { loadSpotterConfig } from '../config/index.js';
+import type { ManifestSummaryScenario } from '../types.js';
 import type { DiffSummary } from '../diff/index.js';
 
 export type ArtifactRunKind = 'baseline' | 'changed';
 
+export type ChangedSelectionMode = 'full' | 'impact' | 'none';
+
+export interface ChangedSelectionSummary {
+  changedFileCount: number;
+  mode: ChangedSelectionMode;
+  possibleAdditionalImpactCount: number;
+  selectedScenarioCount: number;
+  trustedScenarioCount: number;
+}
+
+export interface ChangedScenarioSelection {
+  changedFiles: string[];
+  mode: ChangedSelectionMode;
+  possibleAdditionalImpact: ManifestSummaryScenario[];
+  reason: string;
+  trustedScenarios: ManifestSummaryScenario[];
+}
+
 export interface BaselineArtifactRecord {
   kind: 'baseline';
+  schemaVersion?: number;
   generatedAt: string;
   baselineDir: string;
   configPath: string;
@@ -18,6 +40,7 @@ export interface BaselineArtifactRecord {
 
 export interface ChangedArtifactRecord {
   kind: 'changed';
+  schemaVersion?: number;
   generatedAt: string;
   baselineDir: string;
   configPath: string;
@@ -29,6 +52,8 @@ export interface ChangedArtifactRecord {
   exitCode: number;
   failureMessage?: string;
   passed: boolean;
+  selection?: ChangedScenarioSelection;
+  selectionSummary?: ChangedSelectionSummary;
   summary: DiffSummary;
 }
 
@@ -51,16 +76,21 @@ export async function writeArtifactRecord(
   const { config } = await loadSpotterConfig({ cwd });
   const artifactsDir = path.resolve(cwd, config.paths.artifactsDir);
   const artifactPath = path.join(artifactsDir, createArtifactFileName(record.kind));
+  const versionedRecord = withArtifactSchemaVersion(record);
 
   await mkdir(artifactsDir, { recursive: true });
-  await writeFile(artifactPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  await writeFile(artifactPath, `${JSON.stringify(versionedRecord, null, 2)}\n`, 'utf8');
 
   return {
     artifactPath,
-    record
+    record: versionedRecord
   };
 }
 
 function createArtifactFileName(kind: ArtifactRunKind): string {
   return `${kind}-run.json`;
+}
+
+function withArtifactSchemaVersion(record: ArtifactRecord): ArtifactRecord {
+  return stampArtifactSchemaVersion(record);
 }

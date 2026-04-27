@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyScenarioOverrides,
   generateDeterministicScenarios,
   mapHeuristicsToRoutes,
   mapSignalKindsToRoutes,
@@ -190,6 +191,74 @@ describe('deterministic scenarios', () => {
         name: 'Checkout Validation State',
         priority: 'high',
         tags: ['checkout', 'form', 'validation']
+      }
+    ]);
+  });
+
+  it('applies scenario include and exclude overrides deterministically', () => {
+    expect(
+      applyScenarioOverrides(
+        [
+          {
+            id: 'checkout-default',
+            routePath: '/checkout',
+            name: 'Checkout Default',
+            priority: 'high',
+            tags: ['checkout']
+          },
+          {
+            id: 'checkout-loading-state',
+            routePath: '/checkout',
+            name: 'Checkout Loading State',
+            priority: 'high',
+            tags: ['checkout', 'loading']
+          },
+          {
+            id: 'products-default',
+            routePath: '/products',
+            name: 'Products Default',
+            priority: 'medium',
+            tags: ['products']
+          }
+        ],
+        {
+          exclude: {
+            ids: ['checkout-loading-state'],
+            routePaths: ['/products']
+          },
+          include: [
+            {
+              id: 'checkout-empty-state-manual',
+              routePath: ' /checkout ',
+              name: ' Checkout Empty State ',
+              priority: 'medium',
+              tags: ['checkout', 'empty', 'empty']
+            },
+            {
+              id: 'checkout-default',
+              routePath: '/checkout',
+              name: 'Checkout Default',
+              priority: 'high',
+              tags: ['checkout']
+            }
+          ]
+        }
+      )
+    ).toEqual([
+      {
+        id: 'checkout-default',
+        routePath: '/checkout',
+        name: 'Checkout Default',
+        priority: 'high',
+        tags: ['checkout']
+      },
+      {
+        id: 'checkout-empty-state-manual',
+        origin: 'user-override',
+        routePath: '/checkout',
+        name: 'Checkout Empty State',
+        priority: 'medium',
+        tags: ['checkout', 'empty']
       }
     ]);
   });

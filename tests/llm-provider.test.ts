@@ -128,7 +128,7 @@ describe('llm provider abstraction', () => {
   it('renders deterministic prompts from routes, signals, and existing scenarios', () => {
     expect(buildScenarioEnhancementPrompts(createInput())).toEqual({
       systemPrompt:
-        'You are Spotter, a deterministic-first UX scenario planner. Return JSON only. Suggest only missing scenarios that add clear coverage value.',
+        'You are Spotter, a deterministic-first UX scenario planner. Return JSON only. Suggest only missing scenarios that add clear coverage value. Do not repeat existing scenarios. If no routes are provided, prefer routePath "/" unless the repo context clearly supports another user-facing path.',
       userPrompt: [
         'Routes:',
         JSON.stringify(createInput().routes, null, 2),
@@ -141,6 +141,9 @@ describe('llm provider abstraction', () => {
         '',
         'Return JSON with shape:',
         JSON.stringify({ provider: 'provider-name', model: 'model-name', scenarios: [] }, null, 2),
+        '',
+        'Route guidance:',
+        'Use the listed routes when proposing routePath values.',
         '',
         'Extra instructions: Prefer scenarios that expand existing deterministic coverage.'
       ].join('\n')

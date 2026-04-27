@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  artifactSchemaVersion,
   collectDiffSummary,
   createChangedPlaywrightConfigContents,
   createDefaultCliHandlers,
@@ -123,12 +124,204 @@ describe('changed command', () => {
     expect(configContents).toContain('cwd: "../../apps/web"');
     expect(JSON.parse(artifactContents)).toMatchObject({
       kind: 'changed',
+      schemaVersion: artifactSchemaVersion,
       completed: true,
       exitCode: 1,
       passed: false,
-      resultsDir: path.resolve(cwd, '.generated/artifacts/playwright-results')
+      resultsDir: path.resolve(cwd, '.generated/artifacts/playwright-results'),
+      selectionSummary: {
+        changedFileCount: 0,
+        mode: 'full',
+        possibleAdditionalImpactCount: 0,
+        selectedScenarioCount: 0,
+        trustedScenarioCount: 0
+      }
+    });
+    expect(result.selectionSummary).toEqual({
+      changedFileCount: 0,
+      mode: 'full',
+      possibleAdditionalImpactCount: 0,
+      selectedScenarioCount: 0,
+      trustedScenarioCount: 0
     });
     expect(runner).toHaveBeenCalledWith(expectedRunnerInvocation(result.configPath, cwd));
+  });
+
+  it('narrows changed runs with grep when trusted impact selection is available', async () => {
+    const cwd = await createTempDir();
+    await writeFixtureFile(
+      cwd,
+      'spotter.config.json',
+      JSON.stringify(
+        {
+          appUrl: 'http://127.0.0.1:4200',
+          devServer: null,
+          paths: {
+            artifactsDir: '.generated/artifacts',
+            screenshotsDir: '.generated/baselines',
+            testsDir: '.generated/tests'
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const runner = vi.fn(async () => ({ exitCode: 0 }));
+    const selection = {
+      changedFiles: ['app/checkout/page.tsx'],
+      mode: 'impact' as const,
+      possibleAdditionalImpact: [],
+      reason: 'Selected 1 trusted scenarios from 1 changed files.',
+      trustedScenarios: [
+        {
+          confidence: 'high' as const,
+          correctionHint: 'Adjust Spotter config overrides if this scenario should be included, excluded, or reclassified.',
+          executionScope: '2 targets across 2 viewports and 1 locale',
+          provenance: ['route:/checkout', 'changed-file:app/checkout/page.tsx'],
+          routePath: '/checkout',
+          scenarioId: 'checkout-empty-cart',
+          scenarioName: 'Checkout Empty Cart',
+          whyIncluded: 'Included because app/checkout/page.tsx changed and maps to /checkout.'
+        }
+      ]
+    };
+
+    const result = await runChangedCommand(
+      { cwd },
+      {
+        runner,
+        selectScenarios: async () => selection
+      }
+    );
+
+    expect(runner).toHaveBeenCalledWith({
+      ...expectedRunnerInvocation(result.configPath, cwd),
+      args: [...expectedRunnerInvocation(result.configPath, cwd).args, '--grep', 'checkout-empty-cart']
+    });
+    expect(result.selection).toEqual(selection);
+    expect(result.selectionSummary).toEqual({
+      changedFileCount: 1,
+      mode: 'impact',
+      possibleAdditionalImpactCount: 0,
+      selectedScenarioCount: 1,
+      trustedScenarioCount: 1
+    });
+  });
+
+  it('narrows changed runs with grep when only possible additional impact is available', async () => {
+    const cwd = await createTempDir();
+    await writeFixtureFile(
+      cwd,
+      'spotter.config.json',
+      JSON.stringify(
+        {
+          appUrl: 'http://127.0.0.1:4200',
+          devServer: null,
+          paths: {
+            artifactsDir: '.generated/artifacts',
+            screenshotsDir: '.generated/baselines',
+            testsDir: '.generated/tests'
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const runner = vi.fn(async () => ({ exitCode: 0 }));
+    const selection = {
+      changedFiles: ['app/components/checkout/summary.tsx'],
+      mode: 'impact' as const,
+      possibleAdditionalImpact: [
+        {
+          confidence: 'unknown' as const,
+          correctionHint: 'Review this low-confidence scenario. Keep it as-is, add an explicit override, or exclude it if the shared change is not user-visible here.',
+          executionScope: '2 targets across 2 viewports and 1 locale',
+          provenance: ['route:/checkout', 'scenario:checkout-default', 'changed-file:app/components/checkout/summary.tsx', 'path-overlap:checkout'],
+          routePath: '/checkout',
+          scenarioId: 'checkout-default',
+          scenarioName: 'Checkout Default',
+          whyIncluded:
+            'Possible additional impact because app/components/checkout/summary.tsx overlaps with /checkout via path segment "checkout".'
+        }
+      ],
+      reason: 'Flagged 1 possible additional impact scenarios from 1 changed files.',
+      trustedScenarios: []
+    };
+
+    const result = await runChangedCommand(
+      { cwd },
+      {
+        runner,
+        selectScenarios: async () => selection
+      }
+    );
+
+    expect(runner).toHaveBeenCalledWith({
+      ...expectedRunnerInvocation(result.configPath, cwd),
+      args: [...expectedRunnerInvocation(result.configPath, cwd).args, '--grep', 'checkout-default']
+    });
+    expect(result.selection).toEqual(selection);
+    expect(result.selectionSummary).toEqual({
+      changedFileCount: 1,
+      mode: 'impact',
+      possibleAdditionalImpactCount: 1,
+      selectedScenarioCount: 1,
+      trustedScenarioCount: 0
+    });
+  });
+
+  it('skips Playwright execution when no relevant source changes are found', async () => {
+    const cwd = await createTempDir();
+    await writeFixtureFile(
+      cwd,
+      'spotter.config.json',
+      JSON.stringify(
+        {
+          appUrl: 'http://127.0.0.1:4200',
+          devServer: null,
+          paths: {
+            artifactsDir: '.generated/artifacts',
+            screenshotsDir: '.generated/baselines',
+            testsDir: '.generated/tests'
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const runner = vi.fn(async () => ({ exitCode: 1 }));
+    const result = await runChangedCommand(
+      { cwd },
+      {
+        runner,
+        selectScenarios: async () => ({
+          changedFiles: [],
+          mode: 'none',
+          possibleAdditionalImpact: [],
+          reason: 'No relevant source changes were found for generated scenario coverage.',
+          trustedScenarios: []
+        })
+      }
+    );
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(result.completed).toBe(true);
+    expect(result.passed).toBe(true);
+    expect(result.selectionSummary).toEqual({
+      changedFileCount: 0,
+      mode: 'none',
+      possibleAdditionalImpactCount: 0,
+      selectedScenarioCount: 0,
+      trustedScenarioCount: 0
+    });
+    expect(result.summary).toEqual({
+      changed: 0,
+      unchanged: 0,
+      artifacts: []
+    });
   });
 
   it('marks the changed run incomplete when Playwright fails before producing diff artifacts', async () => {
@@ -191,6 +384,25 @@ describe('changed command', () => {
       completed: true,
       exitCode: 1,
       passed: false,
+      selection: {
+        changedFiles: ['app/components/checkout/summary.tsx'],
+        mode: 'impact' as const,
+        possibleAdditionalImpact: [
+          {
+            confidence: 'unknown' as const,
+            correctionHint: 'Review this low-confidence scenario. Keep it as-is, add an explicit override, or exclude it if the shared change is not user-visible here.',
+            executionScope: '2 targets across 2 viewports and 1 locale',
+            provenance: ['route:/checkout', 'scenario:checkout-default', 'changed-file:app/components/checkout/summary.tsx', 'path-overlap:checkout'],
+            routePath: '/checkout',
+            scenarioId: 'checkout-default',
+            scenarioName: 'Checkout Default',
+            whyIncluded:
+              'Possible additional impact because app/components/checkout/summary.tsx overlaps with /checkout via path segment "checkout".'
+          }
+        ],
+        reason: 'Flagged 1 possible additional impact scenarios from 1 changed files.',
+        trustedScenarios: []
+      },
       summary: {
         changed: 1,
         unchanged: 0,
@@ -218,6 +430,7 @@ describe('changed command', () => {
 
     expect(runChanged).toHaveBeenCalledWith({ cwd: 'C:/repo' });
     expect(write).toHaveBeenCalledWith('Changed run failed with 1 changed screenshots.');
+    expect(write).toHaveBeenCalledWith('Possible additional impact: 1 low-confidence scenarios require review in spotter report.');
     expect(write).toHaveBeenCalledWith('Changed artifact written to C:/repo/.spotter/artifacts/changed-run.json');
     expect(write).toHaveBeenCalledWith('Changed image: diff.png');
   });

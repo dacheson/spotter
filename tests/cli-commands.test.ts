@@ -54,6 +54,50 @@ describe('cli command handlers', () => {
         artifactPath: '/repo/.spotter/artifacts/changed-run.json',
         lines: ['Changed run failed.', 'High priority diffs: 1.'],
         markdownPath: '/repo/.spotter/artifacts/visual-report.md'
+      }),
+      runChanged: async () => ({
+        artifactPath: '/repo/.spotter/artifacts/changed-run.json',
+        appUrl: 'http://127.0.0.1:3000',
+        baselineDir: '/repo/.spotter/baselines',
+        configPath: '/repo/.spotter/artifacts/playwright.changed.config.mjs',
+        resultsDir: '/repo/.spotter/artifacts/playwright-results',
+        testDir: '/repo/.spotter/tests',
+        command: 'npx',
+        args: ['playwright', 'test', '--config', 'config'],
+        completed: true,
+        exitCode: 1,
+        passed: false,
+        selection: {
+          changedFiles: ['app/components/checkout/summary.tsx'],
+          mode: 'impact',
+          possibleAdditionalImpact: [
+            {
+              confidence: 'unknown',
+              correctionHint: 'Review this low-confidence scenario. Keep it as-is, add an explicit override, or exclude it if the shared change is not user-visible here.',
+              executionScope: '2 targets across 2 viewports and 1 locale',
+              provenance: ['route:/checkout', 'scenario:checkout-default', 'changed-file:app/components/checkout/summary.tsx', 'path-overlap:checkout'],
+              routePath: '/checkout',
+              scenarioId: 'checkout-default',
+              scenarioName: 'Checkout Default',
+              whyIncluded:
+                'Possible additional impact because app/components/checkout/summary.tsx overlaps with /checkout via path segment "checkout".'
+            }
+          ],
+          reason: 'Flagged 1 possible additional impact scenarios from 1 changed files.',
+          trustedScenarios: []
+        },
+        summary: {
+          changed: 0,
+          unchanged: 0,
+          artifacts: []
+        }
+      }),
+      runOverride: async () => ({
+        action: 'exclude',
+        changed: true,
+        configPath: '/repo/spotter.config.json',
+        createdConfig: false,
+        scenarioId: 'checkout-loading-state'
       })
     });
 
@@ -62,6 +106,18 @@ describe('cli command handlers', () => {
     await handlers.generate?.({ commandName: 'generate', environment: { cwd: '/repo' } });
     await handlers.prompt?.({ commandName: 'prompt', environment: { cwd: '/repo' } });
     await handlers.import?.({ commandName: 'import', environment: { cwd: '/repo' }, importOptions: { inputPath: 'manual.json' } });
+    await handlers.override?.({
+      commandName: 'override',
+      environment: { cwd: '/repo' },
+      overrideOptions: {
+        action: 'exclude',
+        scenarioId: 'checkout-loading-state'
+      }
+    });
+    await handlers.changed?.({
+      commandName: 'changed',
+      environment: { cwd: '/repo' }
+    });
     await handlers.report?.({ commandName: 'report', environment: { cwd: '/repo' } });
 
     expect(messages).toEqual([
@@ -83,10 +139,49 @@ describe('cli command handlers', () => {
       'Scenario import artifact written to /repo/.spotter/artifacts/scenario-import.json',
       'Scenario artifact written to /repo/.spotter/artifacts/scenarios.json',
       'Scenario plan artifact written to /repo/.spotter/artifacts/scenario-plan.json',
+      'Scenario exclude override recorded for checkout-loading-state.',
+      'Updated Spotter config at /repo/spotter.config.json',
+      'Changed run failed with 0 changed screenshots.',
+      'Possible additional impact: 1 low-confidence scenarios require review in spotter report.',
+      'Changed artifact written to /repo/.spotter/artifacts/changed-run.json',
       'Changed run failed.',
       'High priority diffs: 1.',
       'Markdown report written to /repo/.spotter/artifacts/visual-report.md',
       'Report artifact read from /repo/.spotter/artifacts/changed-run.json'
+    ]);
+  });
+
+  it('prints override idempotency and config creation status', async () => {
+    const messages: string[] = [];
+    const handlers = createDefaultCliHandlers({
+      write: (message) => messages.push(message),
+      runOverride: async () => ({
+        action: 'include',
+        changed: false,
+        configPath: '/repo/spotter.config.json',
+        createdConfig: true,
+        scenarioId: 'checkout-empty-state-manual'
+      })
+    });
+
+    await handlers.override?.({
+      commandName: 'override',
+      environment: { cwd: '/repo' },
+      overrideOptions: {
+        action: 'include',
+        scenario: {
+          id: 'checkout-empty-state-manual',
+          routePath: '/checkout',
+          name: 'Checkout Empty State',
+          priority: 'medium',
+          tags: ['checkout', 'empty']
+        }
+      }
+    });
+
+    expect(messages).toEqual([
+      'Scenario include override already matched checkout-empty-state-manual.',
+      'Created Spotter config at /repo/spotter.config.json'
     ]);
   });
 
