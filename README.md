@@ -227,11 +227,13 @@ Spotter writes its working output into the repository so it can be reviewed in g
 * `.spotter/artifacts/route-manifest.json`
 * `.spotter/artifacts/component-signals.json`
 * `.spotter/artifacts/component-heuristics.json`
+* `.spotter/artifacts/scan-summary.json`
 * `.spotter/artifacts/scenarios.json`
 * `.spotter/artifacts/scenario-plan.json`
 * `.spotter/artifacts/scenario-assist.prompt.md`
 * `.spotter/artifacts/scenario-assist.context.json`
 * `.spotter/artifacts/scenario-import.json`
+* `.spotter/artifacts/baseline-run.json`
 * `.spotter/artifacts/changed-run.json`
 * `.spotter/artifacts/visual-report.md`
 
