@@ -1,10 +1,58 @@
 # Spotter
 
+[![CI](https://github.com/dacheson/spotter/actions/workflows/ci.yml/badge.svg)](https://github.com/dacheson/spotter/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@dcacheson/spotter?color=1f6455&label=npm)](https://www.npmjs.com/package/@dcacheson/spotter)
 [![license](https://img.shields.io/npm/l/@dcacheson/spotter?color=1f6455)](LICENSE)
 [![node](https://img.shields.io/node/v/@dcacheson/spotter?color=1f6455)](https://nodejs.org)
 
 Spotter automatically discovers UX scenarios in a frontend codebase and turns them into Playwright visual regression coverage with minimal setup.
+
+![Spotter scanning the bundled Next.js fixture and generating Playwright tests](docs/cli.png)
+
+## What that run produced
+
+Those two commands ran against `examples/fixture-next-ux`, a Next.js app included in this
+repository. With no configuration beyond `spotter init` and no LLM involved, Spotter derived
+eleven scenarios from route declarations and component ASTs alone:
+
+| Scenario | Route | Priority | Signals |
+| --- | --- | --- | --- |
+| `admin-auth-gate` | `/admin` | high | admin, auth |
+| `admin-role-gate` | `/admin` | high | admin, role |
+| `admin-default` | `/admin` | high | admin |
+| `checkout-loading-state` | `/checkout` | high | checkout, loading |
+| `checkout-validation-state` | `/checkout` | high | checkout, form, validation |
+| `checkout-default` | `/checkout` | high | checkout |
+| `products-empty-state` | `/products` | low | products, empty |
+| `products-default` | `/products` | low | products |
+| `blog-slug-default` | `/blog/[slug]` | low | blog, slug |
+| `pricing-default` | `/pricing` | low | pricing |
+| `home-default` | `/` | low | home |
+
+The auth gate, the role gate, the loading state, the validation state and the empty state are
+the cases most likely to be missed by hand — none of them is a page you navigate to directly.
+
+Each scenario is then expanded across the configured viewports and locales, giving 22 Playwright
+specs from 11 scenarios:
+
+```ts
+// .spotter/tests/admin-admin-auth-gate-desktop-en-us.spec.ts
+import { expect, test } from '@playwright/test';
+
+test.describe('admin-auth-gate', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('admin-auth-gate', async ({ page }) => {
+    await page.goto('/admin');
+    await expect(page).toHaveScreenshot('admin-auth-gate-desktop-en-US.png', {
+      animations: 'disabled',
+      caret: 'hide',
+      fullPage: true,
+      scale: 'css'
+    });
+  });
+});
+```
 
 ## Status
 
