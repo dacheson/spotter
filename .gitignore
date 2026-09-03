@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .spotter/
+.next/
 
 *.log
 npm-debug.log*

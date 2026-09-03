@@ -25,7 +25,15 @@ async function createTempDir(): Promise<string> {
 
 async function copyFixture(relativePath: string): Promise<string> {
   const cwd = await createTempDir();
-  await cp(path.join(examplesDir, relativePath), cwd, { recursive: true });
+  // Skip installed and generated directories. The fixture is a real Next.js app,
+  // so anyone who follows the README and runs it will have node_modules and
+  // .next sitting inside it; copying those makes this take minutes and time the
+  // test out, which reads as a spotter failure rather than a copy problem.
+  const skipped = new Set(['node_modules', '.next', '.spotter', 'test-results']);
+  await cp(path.join(examplesDir, relativePath), cwd, {
+    recursive: true,
+    filter: (source) => !skipped.has(path.basename(source))
+  });
   return cwd;
 }
 

@@ -31,6 +31,68 @@ afterEach(async () => {
 });
 
 describe('visual report summary', () => {
+  it('resolves priority when the diff is keyed by viewport and locale', async () => {
+    // A real changed-run records the rendered target, not the bare scenario:
+    // "checkout-error-state" arrives as "checkout-error-state-desktop-en-US".
+    // Keying the lookup on the bare id missed every time, so the report showed
+    // every diff as unknown priority and claimed zero high-priority diffs while
+    // all of them were high. The fixtures used the bare id, so the suite agreed
+    // with the bug.
+    const cwd = await createTempDir();
+
+    await writeJson(cwd, '.spotter/artifacts/changed-run.json', {
+      kind: 'changed',
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      baselineDir: 'C:/repo/.spotter/baselines',
+      configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
+      resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
+      testDir: 'C:/repo/.spotter/tests',
+      command: 'npx',
+      args: ['playwright', 'test', '--config', 'config'],
+      passed: false,
+      summary: {
+        changed: 2,
+        unchanged: 0,
+        artifacts: [
+          {
+            scenarioId: 'checkout-error-state-desktop-en-US',
+            baselinePath: 'baseline-desktop.png',
+            currentPath: 'current-desktop.png',
+            diffPath: 'diff-desktop.png'
+          },
+          {
+            scenarioId: 'checkout-error-state-mobile-en-US',
+            baselinePath: 'baseline-mobile.png',
+            currentPath: 'current-mobile.png',
+            diffPath: 'diff-mobile.png'
+          }
+        ]
+      }
+    });
+    await writeJson(cwd, '.spotter/artifacts/scenarios.json', {
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      scenarios: [
+        {
+          id: 'checkout-error-state',
+          routePath: '/checkout',
+          name: 'Checkout Error State',
+          priority: 'high',
+          tags: ['checkout', 'error']
+        }
+      ]
+    });
+
+    const summary = await readVisualReportSummary({ cwd });
+
+    expect(summary.diffs.map((diff) => diff.priority)).toEqual(['high', 'high']);
+    expect(summary.diffs.map((diff) => diff.scenarioName)).toEqual([
+      'Checkout Error State',
+      'Checkout Error State'
+    ]);
+    expect(renderVisualReportMarkdown(summary)).toContain('| High priority diffs | 2 |');
+    expect(renderVisualReportMarkdown(summary)).toContain('| Unknown priority diffs | 0 |');
+  });
+
   it('loads changed artifacts and maps diffs back to scenarios', async () => {
     const cwd = await createTempDir();
 

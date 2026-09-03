@@ -67,6 +67,23 @@ export async function readVisualReportSummary(
     | null;
   const scenarios = scenariosArtifact?.scenarios ?? [];
   const scenariosById = Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenario]));
+  // The changed artifact identifies each diff by its rendered target, not by the
+  // bare scenario: "checkout-default" is recorded as
+  // "checkout-default-desktop-en-US". Looking that up directly always missed, so
+  // every diff came back with priority "unknown" and the report claimed zero
+  // high-priority diffs while every changed scenario was high. Fall back to the
+  // longest scenario id the target id starts with.
+  const scenarioIdsByLength = Object.keys(scenariosById).sort((a, b) => b.length - a.length);
+  const resolveScenario = (targetId: string) => {
+    const direct = scenariosById[targetId];
+    if (direct) {
+      return direct;
+    }
+    const match = scenarioIdsByLength.find(
+      (scenarioId) => targetId === scenarioId || targetId.startsWith(`${scenarioId}-`)
+    );
+    return match ? scenariosById[match] : undefined;
+  };
   const scopeByScenarioId = createExecutionScopeSummaryByScenarioId(scenarioPlanArtifact?.items ?? []);
   const fallbackManifestScenarios = changedArtifact.summary.artifacts.map((artifact) =>
     createManifestSummaryScenario({
@@ -74,8 +91,8 @@ export async function readVisualReportSummary(
       ...(scopeByScenarioId[artifact.scenarioId]
         ? { executionScope: scopeByScenarioId[artifact.scenarioId] }
         : {}),
-      ...(scenariosById[artifact.scenarioId]
-        ? { scenario: scenariosById[artifact.scenarioId] }
+      ...(resolveScenario(artifact.scenarioId)
+        ? { scenario: resolveScenario(artifact.scenarioId)! }
         : {})
     })
   );
@@ -91,7 +108,7 @@ export async function readVisualReportSummary(
     ...(changedArtifact.selectionSummary ? { changedFileCount: changedArtifact.selectionSummary.changedFileCount } : {}),
     completed: changedArtifact.completed ?? true,
     diffs: changedArtifact.summary.artifacts.map((artifact) => {
-      const scenario = scenariosById[artifact.scenarioId];
+      const scenario = resolveScenario(artifact.scenarioId);
 
       return {
         ...artifact,

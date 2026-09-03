@@ -54,6 +54,24 @@ test.describe('admin-auth-gate', () => {
 });
 ```
 
+## What it catches
+
+Restyling the checkout form — full-width red button, new label, a placeholder on the input — and
+running `spotter changed`:
+
+![Baseline, current and diff for the checkout-default scenario](docs/diff.png)
+
+Six of the twenty-two screenshots changed, and all six were the checkout scenarios: default,
+loading and validation, across both viewports. The other sixteen were untouched, so the report
+points at the three states one change actually moved rather than at the whole suite.
+
+```
+| Metric               | Value |
+| Total scenarios      |    11 |
+| Changed scenarios    |     6 |
+| High priority diffs  |     6 |
+```
+
 ## Why it exists
 
 Applications contain far more UI states than teams test by hand, and the ones that get missed are
