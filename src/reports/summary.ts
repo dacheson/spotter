@@ -67,29 +67,61 @@ export async function readVisualReportSummary(
     | null;
   const scenarios = scenariosArtifact?.scenarios ?? [];
   const scenariosById = Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenario]));
-  // The changed artifact identifies each diff by its rendered target, not by the
-  // bare scenario: "checkout-default" is recorded as
-  // "checkout-default-desktop-en-US". Looking that up directly always missed, so
-  // every diff came back with priority "unknown" and the report claimed zero
-  // high-priority diffs while every changed scenario was high. Fall back to the
-  // longest scenario id the target id starts with.
-  const scenarioIdsByLength = Object.keys(scenariosById).sort((a, b) => b.length - a.length);
-  const resolveScenario = (targetId: string) => {
+  // The changed artifact identifies each diff by its rendered target, not by
+  // the bare scenario: "checkout-default" is recorded as
+  // "checkout-default-desktop-en-US". Build the exact composite keys from the
+  // scenario plan, which already holds the (scenario, viewport, locale) tuples
+  // the screenshot names were built from.
+  //
+  // Deliberately exact, never a prefix match. Ids are joined with "-" and
+  // viewport names are unrestricted, so "products-default-mobile-en-US" is a
+  // legitimate target of "products-default" AND a legitimate prefix of a
+  // separate "products-default-mobile" scenario. Guessing between them reports
+  // a confidently wrong scenario and priority; leaving it unresolved reports
+  // "unknown", which is the honest answer.
+  const planItems = scenarioPlanArtifact?.items ?? [];
+  const scenariosByTargetId = new Map<string, ScenarioDefinition>();
+  const scenarioIdByTargetId = new Map<string, string>();
+  for (const item of planItems) {
+    const scenario = scenariosById[item.scenario.id];
+    const targetId = `${item.scenario.id}-${item.target.viewport.name}-${item.target.locale.code}`;
+    scenarioIdByTargetId.set(targetId, item.scenario.id);
+    if (scenario) {
+      scenariosByTargetId.set(targetId, scenario);
+    }
+  }
+  // Without a scenario plan - an older artifact set - fall back to prefix
+  // matching, but only accept it when exactly one scenario id matches. That
+  // keeps resolution working for the ordinary case while refusing to guess
+  // between "products-default" and "products-default-mobile", where the wrong
+  // choice is reported with full confidence.
+  const scenarioIds = Object.keys(scenariosById);
+  const unambiguousPrefixId = (targetId: string): string | undefined => {
+    const candidates = scenarioIds.filter(
+      (scenarioId) => targetId === scenarioId || targetId.startsWith(`${scenarioId}-`)
+    );
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+  const resolveScenarioId = (targetId: string): string =>
+    scenarioIdByTargetId.get(targetId) ?? unambiguousPrefixId(targetId) ?? targetId;
+  const resolveScenario = (targetId: string): ScenarioDefinition | undefined => {
     const direct = scenariosById[targetId];
     if (direct) {
       return direct;
     }
-    const match = scenarioIdsByLength.find(
-      (scenarioId) => targetId === scenarioId || targetId.startsWith(`${scenarioId}-`)
-    );
-    return match ? scenariosById[match] : undefined;
+    const planned = scenariosByTargetId.get(targetId);
+    if (planned) {
+      return planned;
+    }
+    const inferred = unambiguousPrefixId(targetId);
+    return inferred ? scenariosById[inferred] : undefined;
   };
   const scopeByScenarioId = createExecutionScopeSummaryByScenarioId(scenarioPlanArtifact?.items ?? []);
   const fallbackManifestScenarios = changedArtifact.summary.artifacts.map((artifact) =>
     createManifestSummaryScenario({
       scenarioId: artifact.scenarioId,
-      ...(scopeByScenarioId[artifact.scenarioId]
-        ? { executionScope: scopeByScenarioId[artifact.scenarioId] }
+      ...(scopeByScenarioId[resolveScenarioId(artifact.scenarioId)]
+        ? { executionScope: scopeByScenarioId[resolveScenarioId(artifact.scenarioId)] }
         : {}),
       ...(resolveScenario(artifact.scenarioId)
         ? { scenario: resolveScenario(artifact.scenarioId)! }
@@ -307,7 +339,14 @@ function countDiffsByPriority(diffs: VisualReportDiff[]): Record<ScenarioPriorit
   return diffs.reduce<Record<ScenarioPriority | 'unknown', number>>(
     (counts, diff) => ({
       ...counts,
-      [diff.priority]: counts[diff.priority] + 1
+      // A priority outside the enum can arrive from an overrides.scenarios
+      // include, which is not runtime-validated. Adding 1 to undefined gives
+      // NaN and the diff then appears in no bucket at all, so every printed
+      // count reads 0 while diffs exist. Fold anything unrecognised into
+      // unknown rather than losing it.
+      ...(diff.priority in counts
+        ? { [diff.priority]: counts[diff.priority] + 1 }
+        : { unknown: counts.unknown + 1 })
     }),
     {
       high: 0,

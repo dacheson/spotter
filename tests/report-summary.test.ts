@@ -31,6 +31,59 @@ afterEach(async () => {
 });
 
 describe('visual report summary', () => {
+  it('does not mistake one scenario for another whose id is a prefix of its target', async () => {
+    // "products-default" rendered at the mobile viewport is recorded as
+    // "products-default-mobile-en-US", which is also a legitimate prefix of a
+    // separate "products-default-mobile" scenario. Resolving by longest prefix
+    // picks the wrong one and reports its priority with full confidence.
+    const cwd = await createTempDir();
+
+    await writeJson(cwd, '.spotter/artifacts/changed-run.json', {
+      kind: 'changed',
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      baselineDir: 'C:/repo/.spotter/baselines',
+      configPath: 'C:/repo/.spotter/artifacts/playwright.changed.config.mjs',
+      resultsDir: 'C:/repo/.spotter/artifacts/playwright-results',
+      testDir: 'C:/repo/.spotter/tests',
+      command: 'npx',
+      args: ['playwright', 'test'],
+      passed: false,
+      summary: {
+        changed: 1,
+        unchanged: 0,
+        artifacts: [
+          {
+            scenarioId: 'products-default-mobile-en-US',
+            baselinePath: 'baseline.png',
+            currentPath: 'current.png',
+            diffPath: 'diff.png'
+          }
+        ]
+      }
+    });
+    await writeJson(cwd, '.spotter/artifacts/scenarios.json', {
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      scenarios: [
+        { id: 'products-default', routePath: '/products', name: 'Products Default', priority: 'low', tags: [] },
+        { id: 'products-default-mobile', routePath: '/products', name: 'Products Mobile Nav', priority: 'high', tags: [] }
+      ]
+    });
+    await writeJson(cwd, '.spotter/artifacts/scenario-plan.json', {
+      generatedAt: '2026-04-19T12:00:00.000Z',
+      items: [
+        {
+          scenario: { id: 'products-default' },
+          target: { locale: { code: 'en-US' }, viewport: { name: 'mobile' } }
+        }
+      ]
+    });
+
+    const summary = await readVisualReportSummary({ cwd });
+
+    expect(summary.diffs[0]?.scenarioName).toBe('Products Default');
+    expect(summary.diffs[0]?.priority).toBe('low');
+  });
+
   it('resolves priority when the diff is keyed by viewport and locale', async () => {
     // A real changed-run records the rendered target, not the bare scenario:
     // "checkout-error-state" arrives as "checkout-error-state-desktop-en-US".
