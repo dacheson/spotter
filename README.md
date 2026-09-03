@@ -7,6 +7,9 @@
 
 Spotter automatically discovers UX scenarios in a frontend codebase and turns them into Playwright visual regression coverage with minimal setup.
 
+For the design reasoning behind it — why the core is deterministic rather than LLM-driven, and what
+turned out to be hard — see [Why I built Spotter](docs/why-spotter.md).
+
 ![Spotter scanning the bundled Next.js fixture and generating Playwright tests](docs/cli.png)
 
 ## What that run produced
@@ -87,6 +90,8 @@ Common gaps include:
 * Feature flag variations
 
 Spotter closes that gap by combining deterministic repository analysis with optional LLM-assisted scenario discovery. The result is stable, reviewable visual coverage that can run locally or in CI.
+
+The longer version of that argument, including the trade-offs it forced: [Why I built Spotter](docs/why-spotter.md).
 
 ## How It Works
 
