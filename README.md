@@ -1,10 +1,14 @@
 # Spotter
 
+[![npm](https://img.shields.io/npm/v/@dcacheson/spotter?color=1f6455&label=npm)](https://www.npmjs.com/package/@dcacheson/spotter)
+[![license](https://img.shields.io/npm/l/@dcacheson/spotter?color=1f6455)](LICENSE)
+[![node](https://img.shields.io/node/v/@dcacheson/spotter?color=1f6455)](https://nodejs.org)
+
 Spotter automatically discovers UX scenarios in a frontend codebase and turns them into Playwright visual regression coverage with minimal setup.
 
 ## Status
 
-Spotter is designed to run as a local dev dependency or through `npx` after publication.
+Spotter is published on npm as [`@dcacheson/spotter`](https://www.npmjs.com/package/@dcacheson/spotter) and runs as a local dev dependency or through `npx`.
 
 Today it supports:
 
