@@ -16,8 +16,15 @@ export async function detectNextRoutes(options: DetectNextRoutesOptions = {}): P
   const cwd = options.cwd ?? process.cwd();
   const routeEntries = new Map<string, RouteDefinition>();
 
-  await collectPagesRoutes(path.join(cwd, 'pages'), cwd, routeEntries);
-  await collectAppRoutes(path.join(cwd, 'app'), cwd, routeEntries);
+  // Next.js supports both a project-root layout and a src/ one, and src/ is
+  // what create-next-app produces when asked. Only looking at the root meant a
+  // real src/app project reported zero routes: the scan degraded honestly, but
+  // the whole deterministic path was silently unavailable. Recorded source
+  // paths stay relative to cwd, so they still read as src/app/... .
+  for (const root of [cwd, path.join(cwd, 'src')]) {
+    await collectPagesRoutes(path.join(root, 'pages'), cwd, routeEntries);
+    await collectAppRoutes(path.join(root, 'app'), cwd, routeEntries);
+  }
 
   return [...routeEntries.values()].sort((left, right) => left.path.localeCompare(right.path));
 }

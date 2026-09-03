@@ -25,6 +25,29 @@ afterEach(async () => {
 });
 
 describe('detectNextRoutes', () => {
+  it('detects routes under a src/ directory', async () => {
+    // create-next-app offers a src/ layout, and real projects use it. Only
+    // looking at the project root meant such a project reported zero routes:
+    // the scan said so honestly rather than inventing any, but the entire
+    // deterministic path was quietly unavailable on a supported layout.
+    const cwd = await createTempDir();
+
+    await writeFixtureFile(cwd, 'src/app/page.tsx');
+    await writeFixtureFile(cwd, 'src/app/journal/page.tsx');
+    await writeFixtureFile(cwd, 'src/app/journal/[id]/page.tsx');
+    await writeFixtureFile(cwd, 'src/pages/legacy.tsx');
+
+    const routes = await detectNextRoutes({ cwd });
+
+    expect(routes.map((route) => route.path)).toEqual([
+      '/',
+      '/journal',
+      '/journal/[id]',
+      '/legacy'
+    ]);
+    expect(routes.every((route) => route.filePath.startsWith('src'))).toBe(true);
+  });
+
   it('detects app router routes and ignores route groups and parallel routes', async () => {
     const cwd = await createTempDir();
 

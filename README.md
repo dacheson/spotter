@@ -135,7 +135,7 @@ triggering a full-suite rerun. See [ARCHITECTURE.md](ARCHITECTURE.md) for the la
 
 Route discovery is strongest where routes are declared or file-based:
 
-- Next.js app router and pages router
+- Next.js app router and pages router, at the project root or under `src/`
 - Remix flat-file routes
 - Nuxt pages routes
 - React Router route config and `<Route path=...>` declarations
